@@ -1,175 +1,208 @@
 <script lang="ts">
-  import { tick, onMount } from 'svelte'
-  import { calculate, newScope, type CalcResult } from '../engine/calc'
-  import { settings, ui, currency, wide, short, addHistory, haptic, copy } from '../lib/state.svelte'
+  import { onMount } from 'svelte'
+  import { MathfieldElement } from 'mathlive'
+  import { calculateLatex, newScope, type CalcResult } from '../engine/calc'
+  import { toFraction, fractionLatex, fractionPlain, prefersFraction } from '../engine/exact'
+  import {
+    settings,
+    ui,
+    currency,
+    wide,
+    short,
+    addHistory,
+    haptic,
+    copy,
+    type HistoryEntry,
+  } from '../lib/state.svelte'
+  import { latexMarkup, numberLatex } from '../lib/markup'
   import Keypad, { type Key } from './Keypad.svelte'
   import History from './History.svelte'
   import Icon from './Icon.svelte'
 
-  let field = $state<HTMLTextAreaElement>()
+  // fonts come from mathlive/fonts.css (bundled, so they work offline); no key sounds
+  MathfieldElement.fontsDirectory = null
+  MathfieldElement.soundsDirectory = null
+
+  let host = $state<HTMLDivElement>()
+  let mf: MathfieldElement | undefined
   let error = $state('')
   let shaking = $state(false)
   let inv = $state(false)
+  /** The person pressed ⇄ while typing: show the answer in the other form. */
+  let flipped = $state(false)
 
-  /** Right after "=": a digit starts a new calculation, an operator continues from the result. */
+  /** Right after "=": a digit starts a new problem, an operator continues from the answer. */
   let justEvaluated = false
-  /** The exact value behind the result shown after "=", so 1/3 × 3 gives 1, not 0,999… */
-  let ans: { text: string; value: unknown } | null = null
 
-  const undoStack: { value: string; caret: number }[] = []
-  const redoStack: { value: string; caret: number }[] = []
+  interface Form {
+    latex: string
+    plain: string
+  }
+  interface Answer {
+    value: unknown
+    decimal: Form
+    fraction: Form | null
+    asFraction: boolean
+  }
+  /** The last answer, shown in the field after "=". Its exact value is used when continuing. */
+  let answer = $state.raw<Answer | null>(null)
+  /** What the field contained right after "=" (MathLive may rewrite the LaTeX we give it). */
+  let answerLatex = $state('')
 
-  const OPERATORS = '+−×÷'
+  const CONTINUES = /^(?:[-+*/:^!)]|\\(?:cdot|times|div|%))/
 
-  function evaluate(expr: string): CalcResult {
+  function evaluate(latex: string): CalcResult {
     const scope = newScope(settings.angle)
-    if (ans && expr.startsWith(ans.text)) {
-      const rest = expr.slice(ans.text.length)
-      if (rest === '' || /^\s*[-+−*×/÷:^%!²³)]/.test(rest)) {
-        scope.set('_ans', ans.value)
-        expr = '_ans' + rest
+    if (answer && answerLatex && latex.startsWith(answerLatex)) {
+      const rest = latex.slice(answerLatex.length).trimStart()
+      if (rest === '' || CONTINUES.test(rest)) {
+        scope.set('_ans', answer.value)
+        return calculateLatex(rest, settings, scope, '_ans')
       }
     }
-    return calculate(expr, settings, scope)
+    return calculateLatex(latex, settings, scope)
   }
 
-  const preview = $derived.by(() => {
+  const result = $derived.by(() => {
     currency.version // recalculate when exchange rates arrive
-    return evaluate(ui.expr)
+    return evaluate(ui.latex)
   })
-
-  // a bare number needs no preview
-  const showPreview = $derived(preview.ok && !/^\s*[-−]?[\d\s.,]*$/.test(ui.expr))
+  const fraction = $derived(result.ok ? toFraction(result.value) : null)
+  const previewAsFraction = $derived(!!fraction && prefersFraction(ui.latex) !== flipped)
+  const showingAnswer = $derived(!!answer && ui.latex === answerLatex)
+  // a bare number needs no "= …" under it
+  const showPreview = $derived(result.ok && !showingAnswer && !/^-?[\d{},.\s]*$/.test(ui.latex))
 
   const sideBySide = $derived(wide.current || short.current)
   const historyAside = $derived(wide.current && !short.current)
   const historyInline = $derived(!wide.current && !short.current)
 
-  const sizeClass = $derived(
-    ui.expr.length <= 10 ? 'xl' : ui.expr.length <= 16 ? 'l' : ui.expr.length <= 26 ? 'm' : 's',
-  )
+  const sizeClass = $derived(ui.latex.length <= 24 ? 'l' : ui.latex.length <= 60 ? 'm' : 's')
 
-  function selection(): [number, number] {
-    if (!field) return [ui.expr.length, ui.expr.length]
-    return [field.selectionStart, field.selectionEnd]
-  }
+  const plainToLatex = (plain: string) => numberLatex(plain, settings.decimal)
 
-  function setExpr(value: string, caret: number, record = true) {
-    if (record && value !== ui.expr) {
-      undoStack.push({ value: ui.expr, caret: selection()[0] })
-      if (undoStack.length > 200) undoStack.shift()
-      redoStack.length = 0
-    }
-    ui.expr = value
+  function sync() {
+    if (!mf) return
+    ui.latex = mf.value
     error = ''
-    if (ans && !value.startsWith(ans.text)) ans = null
-    tick().then(() => {
-      if (!field) return
-      field.focus({ preventScroll: true })
-      field.setSelectionRange(caret, caret)
-    })
+    flipped = false
   }
 
-  function insert(text: string) {
-    let value = ui.expr
-    let [start, end] = selection()
-    if (justEvaluated) {
-      justEvaluated = false
-      if (/^[-+−×÷^%!²)]/.test(text)) {
-        start = end = value.length
-      } else {
-        value = ''
-        start = end = 0
-        ans = null
-      }
-    }
-    // an operator replaces the one before it: "5+" then "×" gives "5×"; a minus may follow × and ÷
-    if (start === end && OPERATORS.includes(text) && text !== '−') {
-      const before = value.slice(0, start).replace(/[+−×÷\s]+$/, '')
-      if (!before) return
-      value = before + value.slice(end)
-      start = end = before.length
-    }
-    setExpr(value.slice(0, start) + text + value.slice(end), start + text.length)
+  function setValue(latex: string) {
+    if (!mf) return
+    mf.value = latex
+    mf.position = mf.lastOffset
+    sync()
   }
 
-  function decimalKey() {
-    const [start] = selection()
-    const number = (justEvaluated ? '' : ui.expr.slice(0, start)).match(/[\d.,]*$/)![0]
-    if (/[.,]/.test(number)) return
-    insert(number ? settings.decimal : '0' + settings.decimal)
+  function focusField() {
+    mf?.focus()
+  }
+
+  /** Before input right after "=": start anew, or continue from the answer. */
+  function beforeInput(continues: boolean) {
+    if (!justEvaluated || !mf) return
+    justEvaluated = false
+    if (continues) {
+      mf.position = mf.lastOffset
+    } else {
+      mf.value = ''
+      answer = null
+      answerLatex = ''
+    }
+  }
+
+  function typed(text: string, continues = false) {
+    if (!mf) return
+    beforeInput(continues)
+    mf.executeCommand(['typedText', text])
+  }
+
+  function insert(latex: string, continues = false) {
+    if (!mf) return
+    beforeInput(continues)
+    mf.executeCommand(['insert', latex, { selectionMode: 'placeholder' }])
   }
 
   function parenKey() {
-    const before = justEvaluated ? '' : ui.expr.slice(0, selection()[0])
+    if (!mf) return
+    const before = justEvaluated ? '' : mf.getValue(0, mf.position, 'latex')
     const depth = (before.match(/\(/g)?.length ?? 0) - (before.match(/\)/g)?.length ?? 0)
-    const last = before.trimEnd().slice(-1)
-    insert(depth > 0 && /[\d)%!²³πe\p{L}]/u.test(last) ? ')' : '(')
-  }
-
-  function backspace() {
-    justEvaluated = false
-    const value = ui.expr
-    const [start, end] = selection()
-    if (start !== end) return setExpr(value.slice(0, start) + value.slice(end), start)
-    if (start === 0) return
-    // "sin(" and "√(" are erased as one piece
-    const token = value.slice(0, start).match(/(?:[\p{L}√]+\(|\s+)$/u)?.[0]
-    const len = token?.length ?? 1
-    setExpr(value.slice(0, start - len) + value.slice(start), start - len)
+    const last = before.replace(/\\right\.$/, '').trimEnd().slice(-1)
+    if (depth > 0 && /[\d)}!%\p{L}]/u.test(last)) typed(')', true)
+    else typed('(')
   }
 
   function clear() {
     justEvaluated = false
-    ans = null
-    if (ui.expr) setExpr('', 0)
-    error = ''
+    answer = null
+    answerLatex = ''
+    setValue('')
   }
 
-  function equals() {
-    const expr = ui.expr.trim()
-    if (!expr) return
-    const r = evaluate(expr)
-    if (!r.ok) {
-      error = r.error || 'Ошибка в выражении'
-      shaking = true
-      setTimeout(() => (shaking = false), 400)
-      return
-    }
-    if (r.plain !== expr) addHistory({ expr, text: r.text, plain: r.plain, at: Date.now() })
-    ans = { text: r.plain, value: r.value }
-    setExpr(r.plain, r.plain.length)
+  function shake() {
+    shaking = true
+    setTimeout(() => (shaking = false), 400)
+  }
+
+  function showAnswer(asFraction: boolean) {
+    if (!answer) return
+    const form = asFraction && answer.fraction ? answer.fraction : answer.decimal
+    answer = { ...answer, asFraction: form === answer.fraction }
+    setValue(form.latex)
+    answerLatex = ui.latex
     justEvaluated = true
   }
 
-  function undo() {
-    const prev = undoStack.pop()
-    if (!prev) return
-    redoStack.push({ value: ui.expr, caret: selection()[0] })
-    justEvaluated = false
-    setExpr(prev.value, prev.caret, false)
+  function equals() {
+    if (!mf) return
+    const latex = mf.value
+    if (!latex.trim() || showingAnswer) return
+    const r = evaluate(latex)
+    if (!r.ok) {
+      error = r.error || 'Ошибка в выражении'
+      shake()
+      return
+    }
+    const f = toFraction(r.value)
+    const asFraction = !!f && prefersFraction(latex) !== flipped
+    const fractionForm = f ? { latex: fractionLatex(f), plain: fractionPlain(f) } : null
+    addHistory({
+      latex,
+      text: r.text,
+      plain: r.plain,
+      fraction: fractionForm?.latex,
+      showFraction: asFraction,
+      at: Date.now(),
+    })
+    answer = { value: r.value, decimal: { latex: plainToLatex(r.plain), plain: r.plain }, fraction: fractionForm, asFraction }
+    showAnswer(asFraction)
   }
 
-  function redo() {
-    const next = redoStack.pop()
-    if (!next) return
-    undoStack.push({ value: ui.expr, caret: selection()[0] })
-    setExpr(next.value, next.caret, false)
+  /** ⇄: fraction ↔ decimal, for the answer in the field or for the preview. */
+  function flip() {
+    if (showingAnswer && answer) showAnswer(!answer.asFraction)
+    else flipped = !flipped
+    focusField()
+  }
+
+  function copyShown() {
+    if (showingAnswer && answer) {
+      copy(answer.asFraction && answer.fraction ? answer.fraction.plain : answer.decimal.plain)
+    } else if (result.ok) {
+      copy(previewAsFraction && fraction ? fractionPlain(fraction) : result.plain)
+    }
   }
 
   function onkey(key: Key) {
     haptic()
+    if (!mf) return
+    focusField()
     switch (key.id) {
       case 'clear':
         return clear()
-      case 'back':
-        return backspace()
       case 'equals':
         return equals()
-      case 'paren':
-        return parenKey()
-      case 'decimal':
-        return decimalKey()
       case 'inv':
         inv = !inv
         return
@@ -179,107 +212,132 @@
       case 'toggle':
         ui.sciOpen = !ui.sciOpen
         return
+      case 'back':
+        justEvaluated = false
+        mf.executeCommand('deleteBackward')
+        break
+      case 'left':
+        justEvaluated = false
+        mf.executeCommand('moveToPreviousChar')
+        break
+      case 'right':
+        justEvaluated = false
+        mf.executeCommand('moveToNextChar')
+        break
+      case 'paren':
+        parenKey()
+        break
+      case 'decimal':
+        typed(settings.decimal)
+        break
       default:
-        if (key.insert) {
-          insert(key.insert)
-          if (inv && key.kind === 'sci') inv = false
-        }
+        if (key.typed) typed(key.typed, key.continues)
+        else if (key.latex) insert(key.latex, key.continues)
+        if (inv && key.kind === 'sci') inv = false
     }
+    sync()
   }
 
-  const TYPED: Record<string, string> = { '*': '×', '/': '÷', '-': '−', ':': '÷' }
-
-  function typeChar(ch: string) {
-    if (ch === '=') return equals()
-    if (ch === '.' || (ch === ',' && settings.decimal === ',')) return decimalKey()
-    insert(TYPED[ch] ?? ch)
-  }
-
-  function onbeforeinput(e: InputEvent) {
-    switch (e.inputType) {
-      case 'insertText':
-        if (!e.data) return
-        e.preventDefault()
-        for (const ch of e.data) typeChar(ch)
-        return
-      case 'insertLineBreak':
-      case 'insertParagraph':
-        e.preventDefault()
-        return equals()
-      case 'deleteContentBackward':
-        e.preventDefault()
-        return backspace()
-      case 'historyUndo':
-        e.preventDefault()
-        return undo()
-      case 'historyRedo':
-        e.preventDefault()
-        return redo()
-    }
-  }
-
-  /** Paste, drag-and-drop, delete and anything else the browser did itself. */
-  function oninput() {
-    if (!field) return
-    const value = field.value.replace(/\r?\n/g, ' ')
-    if (value === ui.expr) return
-    undoStack.push({ value: ui.expr, caret: field.selectionStart })
-    ui.expr = value
-    error = ''
-    justEvaluated = false
-  }
-
-  function onkeydown(e: KeyboardEvent) {
-    const mod = e.ctrlKey || e.metaKey
-    // e.code, so shortcuts also work with the Russian layout
-    if (e.key === 'Enter') {
+  /** Keys typed on a real keyboard while the formula has focus. MathLive handles the rest. */
+  function onFieldKeydown(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return
+    if (e.key === 'Enter' || e.key === '=') {
       e.preventDefault()
+      e.stopImmediatePropagation()
       equals()
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      e.stopImmediatePropagation()
       clear()
-    } else if (mod && e.code === 'KeyZ') {
-      e.preventDefault()
-      if (e.shiftKey) redo()
-      else undo()
-    } else if (mod && e.code === 'KeyY') {
-      e.preventDefault()
-      redo()
+    } else if (justEvaluated && e.key.length === 1) {
+      beforeInput(/[-+*/:^!)%]/.test(e.key))
+    } else if (e.key.startsWith('Arrow') || e.key === 'Backspace' || e.key === 'Delete') {
+      justEvaluated = false
     }
   }
 
-  /** Typing anywhere on the page goes into the expression. */
+  /** Typing anywhere on the page goes into the formula. */
   function onWindowKeydown(e: KeyboardEvent) {
-    if (!field || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
+    if (!mf || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
     const target = e.target as HTMLElement
+    if (target === mf) return
     const onButton = target.tagName === 'BUTTON'
     if (target !== document.body && !onButton) return
     if (e.key.length === 1 && e.key !== ' ') {
       e.preventDefault()
-      field.focus({ preventScroll: true })
-      typeChar(e.key)
-    } else if (!onButton && (e.key === 'Enter' || e.key === 'Backspace' || e.key === 'Escape')) {
+      focusField()
+      if (e.key === '=') return equals()
+      typed(e.key, /[-+*/:^!)%]/.test(e.key))
+      sync()
+    } else if (!onButton && ['Enter', 'Backspace', 'Escape'].includes(e.key)) {
       e.preventDefault()
+      focusField()
       if (e.key === 'Enter') equals()
-      else if (e.key === 'Backspace') backspace()
-      else clear()
+      else if (e.key === 'Escape') clear()
+      else {
+        mf.executeCommand('deleteBackward')
+        sync()
+      }
     }
   }
 
-  function pick(text: string) {
-    if (justEvaluated || !ui.expr.trim()) {
+  function pick(entry: HistoryEntry, part: 'expr' | 'result') {
+    if (!mf) return
+    const latex =
+      part === 'expr'
+        ? (entry.latex ?? `\\text{${entry.expr ?? ''}}`)
+        : entry.showFraction && entry.fraction
+          ? entry.fraction
+          : plainToLatex(entry.plain)
+    focusField()
+    if (justEvaluated || !mf.value.trim()) {
       justEvaluated = false
-      ans = null
-      setExpr(text, text.length)
+      answer = null
+      answerLatex = ''
+      setValue(latex)
     } else {
-      insert(text)
+      mf.executeCommand(['insert', latex])
+      sync()
     }
   }
+
+  $effect(() => {
+    MathfieldElement.decimalSeparator = settings.decimal
+  })
 
   onMount(() => {
-    // on a computer, start typing right away; on a phone, do not pop anything up
-    if (matchMedia('(pointer: fine)').matches) field?.focus()
-    field?.setSelectionRange(ui.expr.length, ui.expr.length)
+    MathfieldElement.decimalSeparator = settings.decimal
+    const field = new MathfieldElement()
+    // our own keypad replaces both MathLive's keyboard and the phone's one
+    field.mathVirtualKeyboardPolicy = 'manual'
+    field.setAttribute('aria-label', 'Пример')
+    field.value = ui.latex
+    // the remaining options need the field to be on the page
+    host!.append(field)
+    field.smartFence = true
+    // otherwise 2^10 becomes 2¹0: the cursor would leave the exponent after one digit
+    field.smartSuperscript = false
+    field.menuItems = []
+    field.placeholder = '0'
+    // Russian textbook names when typing on a keyboard
+    field.inlineShortcuts = {
+      ...field.inlineShortcuts,
+      tg: '\\operatorname{tg}',
+      ctg: '\\operatorname{ctg}',
+      arctg: '\\operatorname{arctg}',
+      lg: '\\lg',
+    }
+    field.addEventListener('keydown', onFieldKeydown, { capture: true })
+    field.addEventListener('input', sync)
+    field.addEventListener('pointerdown', () => (justEvaluated = false))
+    mf = field
+    mf.position = mf.lastOffset
+    // on a computer, start typing right away; on a phone, nothing should pop up
+    if (matchMedia('(pointer: fine)').matches) focusField()
+    return () => {
+      field.remove()
+      mf = undefined
+    }
   })
 </script>
 
@@ -294,47 +352,48 @@
         </div>
       {/if}
 
-      <label class="visually-hidden" for="expr">Выражение</label>
-      <textarea
-        id="expr"
-        class="expr num {sizeClass}"
-        class:shaking
-        bind:this={field}
-        value={ui.expr}
-        rows="1"
-        inputmode="none"
-        autocomplete="off"
-        autocapitalize="off"
-        spellcheck="false"
-        placeholder="0"
-        aria-describedby="preview"
-        aria-invalid={!!error}
-        {onbeforeinput}
-        {oninput}
-        {onkeydown}
-        onclick={() => (justEvaluated = false)}
-      ></textarea>
+      <div class="field {sizeClass}" class:shaking bind:this={host}></div>
 
-      <div class="preview-row" id="preview" aria-live="polite">
+      <div class="result-row" aria-live="polite">
         {#if error}
           <span class="error">{error}</span>
-        {:else if showPreview && preview.ok}
-          <span class="preview num">= {preview.text}</span>
-          <button class="icon-btn copy" aria-label="Скопировать результат" onclick={() => preview.ok && copy(preview.plain)}>
+        {:else if showPreview && result.ok}
+          <span class="preview">
+            {@html latexMarkup(
+              '=' +
+                (previewAsFraction && fraction
+                  ? fractionLatex(fraction)
+                  : numberLatex(result.plain, settings.decimal, true)),
+            )}
+          </span>
+        {/if}
+        {#if (showPreview && fraction) || (showingAnswer && answer?.fraction)}
+          <button
+            class="icon-btn"
+            aria-label={(showingAnswer ? answer?.asFraction : previewAsFraction)
+              ? 'Показать десятичной дробью'
+              : 'Показать обыкновенной дробью'}
+            title="Дробь ⇄ десятичная"
+            onmousedown={(e) => e.preventDefault()}
+            onclick={flip}
+          >
+            <Icon name="flip" size={18} />
+          </button>
+        {/if}
+        {#if !error && (showPreview || showingAnswer)}
+          <button
+            class="icon-btn"
+            aria-label="Скопировать ответ"
+            onmousedown={(e) => e.preventDefault()}
+            onclick={copyShown}
+          >
             <Icon name="copy" size={18} />
           </button>
         {/if}
       </div>
     </div>
 
-    <Keypad
-      {onkey}
-      decimal={settings.decimal}
-      angle={settings.angle}
-      {inv}
-      sciOpen={ui.sciOpen}
-      wide={sideBySide}
-    />
+    <Keypad {onkey} decimal={settings.decimal} angle={settings.angle} {inv} sciOpen={ui.sciOpen} wide={sideBySide} />
   </div>
 
   {#if historyAside}
@@ -360,7 +419,7 @@
 
   .display {
     flex: 1;
-    min-height: 112px;
+    min-height: 120px;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -384,43 +443,25 @@
     mask-image: linear-gradient(to bottom, transparent, #000 32px);
   }
 
-  .expr {
-    width: 100%;
+  .field {
     flex: none;
-    border: 0;
-    outline: none;
-    resize: none;
-    background: transparent;
-    text-align: right;
-    line-height: 1.2;
-    padding: 2px 0;
-    max-height: 40dvh;
-    field-sizing: content;
-    scrollbar-width: none;
-    overflow-wrap: anywhere;
-    caret-color: var(--accent-text);
+    min-height: 64px;
+    display: flex;
+    align-items: center;
     transition: font-size var(--normal);
   }
 
-  .expr::placeholder {
-    color: var(--muted);
-    opacity: 0.6;
+  .field.l {
+    font-size: clamp(30px, 5.2dvh, 44px);
+  }
+  .field.m {
+    font-size: clamp(24px, 4dvh, 34px);
+  }
+  .field.s {
+    font-size: clamp(20px, 3.2dvh, 26px);
   }
 
-  .expr.xl {
-    font-size: clamp(40px, 7dvh, 60px);
-  }
-  .expr.l {
-    font-size: clamp(32px, 5.4dvh, 46px);
-  }
-  .expr.m {
-    font-size: clamp(26px, 4.2dvh, 36px);
-  }
-  .expr.s {
-    font-size: clamp(22px, 3.4dvh, 28px);
-  }
-
-  .expr.shaking {
+  .field.shaking {
     animation: shake 0.35s;
   }
 
@@ -435,15 +476,16 @@
     }
   }
 
-  .preview-row {
-    min-height: 48px;
+  .result-row {
+    min-height: 52px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 4px;
+    gap: 2px;
   }
 
   .preview {
+    margin-right: 4px;
     font-size: clamp(20px, 3.4dvh, 28px);
     color: var(--muted);
     text-align: right;
@@ -451,12 +493,13 @@
   }
 
   .error {
-    font-size: 18px;
+    margin-right: auto;
+    font-size: 17px;
     color: var(--error);
     font-weight: 500;
   }
 
-  .copy {
+  .result-row .icon-btn {
     color: var(--muted);
     flex: none;
   }
@@ -468,21 +511,23 @@
       margin-top: 4px;
       padding: 4px 16px 0;
     }
-    .preview-row {
-      min-height: 36px;
+    .field {
+      min-height: 48px;
     }
-    .expr.xl,
-    .expr.l {
-      font-size: 34px;
+    .field.l,
+    .field.m {
+      font-size: 28px;
     }
-    .expr.m,
-    .expr.s {
-      font-size: 24px;
+    .field.s {
+      font-size: 22px;
+    }
+    .result-row {
+      min-height: 40px;
     }
   }
 
   .side {
-    width: 320px;
+    width: 340px;
     flex: none;
     margin: 12px 16px 16px 0;
     padding: 12px 8px;

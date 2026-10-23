@@ -1,18 +1,25 @@
 <script lang="ts" module>
   export interface Key {
     id: string
-    label: string
-    /** Text inserted at the cursor; keys without it are actions. */
-    insert?: string
     kind: 'num' | 'fn' | 'op' | 'eq' | 'sci'
-    aria?: string
+    aria: string
+    /** Plain label, or a label drawn as a formula, or an icon. */
+    label?: string
+    labelLatex?: string
     icon?: IconName
+    /** Typed as if from the keyboard: digits, + − ( ) ! */
+    typed?: string
+    /** A LaTeX template inserted at the cursor: #@ takes what is before it, #? and #0 are empty boxes. */
+    latex?: string
+    /** After "=", the key continues from the answer instead of starting anew. */
+    continues?: boolean
     pressed?: boolean
   }
 </script>
 
 <script lang="ts">
   import Icon, { type IconName } from './Icon.svelte'
+  import { latexMarkup } from '../lib/markup'
   import type { DecimalMark } from '../engine/input'
   import type { Angle } from '../engine/math'
 
@@ -27,41 +34,65 @@
 
   let { onkey, decimal, angle, inv, sciOpen, wide }: Props = $props()
 
-  const num = (d: string): Key => ({ id: d, label: d, insert: d, kind: 'num' })
-  const op = (id: string, label: string, aria: string): Key => ({ id, label, insert: label, kind: 'op', aria })
-  const sci = (id: string, label: string, insert: string, aria: string): Key => ({ id, label, insert, kind: 'sci', aria })
+  const BOX = '\\square'
+
+  const num = (d: string): Key => ({ id: d, label: d, typed: d, kind: 'num', aria: d })
 
   const basic = $derived<Key[]>([
     { id: 'clear', label: 'AC', kind: 'fn', aria: 'Очистить всё' },
     { id: 'paren', label: '( )', kind: 'fn', aria: 'Скобка' },
-    { id: 'percent', label: '%', insert: '%', kind: 'fn', aria: 'Процент' },
-    op('div', '÷', 'Разделить'),
+    { id: 'percent', label: '%', latex: '\\%', kind: 'fn', aria: 'Процент', continues: true },
+    // keys use calculator symbols; the formula is typeset the Russian textbook way: 6 : 2, 3 · 4
+    { id: 'div', label: '÷', latex: ':', kind: 'op', aria: 'Разделить', continues: true },
     num('7'), num('8'), num('9'),
-    op('mul', '×', 'Умножить'),
+    { id: 'mul', label: '×', latex: '\\cdot', kind: 'op', aria: 'Умножить', continues: true },
     num('4'), num('5'), num('6'),
-    op('sub', '−', 'Минус'),
+    { id: 'sub', label: '−', typed: '-', kind: 'op', aria: 'Минус', continues: true },
     num('1'), num('2'), num('3'),
-    op('add', '+', 'Плюс'),
+    { id: 'add', label: '+', typed: '+', kind: 'op', aria: 'Плюс', continues: true },
     num('0'),
     { id: 'decimal', label: decimal, kind: 'num', aria: decimal === ',' ? 'Запятая' : 'Точка' },
-    { id: 'back', label: '', icon: 'backspace', kind: 'fn', aria: 'Стереть' },
+    { id: 'back', icon: 'backspace', kind: 'fn', aria: 'Стереть' },
     { id: 'equals', label: '=', kind: 'eq', aria: 'Равно' },
   ])
 
+  const sci = (id: string, labelLatex: string, latex: string, aria: string, continues = false): Key => ({
+    id,
+    labelLatex,
+    latex,
+    aria,
+    continues,
+    kind: 'sci',
+  })
+  const fn = (id: string, name: string, aria: string): Key =>
+    sci(id, `\\operatorname{${name}}`, `\\operatorname{${name}}\\left(#0\\right)`, aria)
+
   const sciKeys = $derived<Record<string, Key>>({
-    root: inv ? sci('root', 'x²', '²', 'Квадрат') : sci('root', '√', '√(', 'Квадратный корень'),
-    pow: sci('pow', 'xʸ', '^', 'Степень'),
-    pi: sci('pi', 'π', 'π', 'Пи'),
-    fact: sci('fact', 'x!', '!', 'Факториал'),
-    recip: sci('recip', '1/x', '^(−1)', 'Обратное число'),
-    toggle: {
-      id: 'toggle',
-      label: '',
-      icon: sciOpen ? 'chevron-up' : 'chevron-down',
-      kind: 'sci',
-      aria: sciOpen ? 'Скрыть инженерные функции' : 'Показать инженерные функции',
-      pressed: sciOpen,
-    },
+    left: { id: 'left', icon: 'chevron-left', kind: 'sci', aria: 'Курсор влево' },
+    right: { id: 'right', icon: 'chevron-right', kind: 'sci', aria: 'Курсор вправо' },
+    frac: inv
+      ? sci('frac', `${BOX}\\frac{${BOX}}{${BOX}}`, '\\frac{#?}{#?}', 'Смешанное число')
+      : sci('frac', `\\frac{${BOX}}{${BOX}}`, '\\frac{#@}{#?}', 'Дробь', true),
+    root: inv
+      ? sci('root', `\\sqrt[3]{${BOX}}`, '\\sqrt[3]{#0}', 'Кубический корень')
+      : sci('root', `\\sqrt{${BOX}}`, '\\sqrt{#0}', 'Квадратный корень'),
+    nroot: sci('nroot', `\\sqrt[n]{${BOX}}`, '\\sqrt[#?]{#0}', 'Корень n-й степени'),
+    square: sci('square', `${BOX}^2`, '#@^{2}', 'Квадрат', true),
+    pow: sci('pow', `${BOX}^{${BOX}}`, '#@^{#?}', 'Степень', true),
+    recip: sci('recip', `\\frac{1}{${BOX}}`, '\\frac{1}{#@}', 'Обратное число', true),
+    abs: sci('abs', `\\left|${BOX}\\right|`, '\\left|#0\\right|', 'Модуль'),
+    pi: sci('pi', '\\pi', '\\pi', 'Пи'),
+    e: sci('e', 'e', '\\exponentialE', 'Число e'),
+    fact: { id: 'fact', labelLatex: 'x!', typed: '!', kind: 'sci', aria: 'Факториал', continues: true },
+    degree: sci('degree', `${BOX}^{\\circ}`, '\\degree', 'Градусы', true),
+    sin: inv ? fn('sin', 'arcsin', 'Арксинус') : fn('sin', 'sin', 'Синус'),
+    cos: inv ? fn('cos', 'arccos', 'Арккосинус') : fn('cos', 'cos', 'Косинус'),
+    tan: inv ? fn('tan', 'arctg', 'Арктангенс') : fn('tan', 'tg', 'Тангенс'),
+    lg: inv ? sci('lg', `10^{${BOX}}`, '10^{#?}', 'Десять в степени') : fn('lg', 'lg', 'Десятичный логарифм'),
+    ln: inv ? sci('ln', `e^{${BOX}}`, '\\exponentialE^{#?}', 'e в степени') : fn('ln', 'ln', 'Натуральный логарифм'),
+    log: sci('log', `\\log_{${BOX}}`, '\\log_{#?}\\left(#?\\right)', 'Логарифм по основанию'),
+    open: { id: 'open', label: '(', typed: '(', kind: 'sci', aria: 'Открыть скобку' },
+    close: { id: 'close', label: ')', typed: ')', kind: 'sci', aria: 'Закрыть скобку', continues: true },
     inv: { id: 'inv', label: 'INV', kind: 'sci', aria: 'Обратные функции', pressed: inv },
     angle: {
       id: 'angle',
@@ -69,23 +100,34 @@
       kind: 'sci',
       aria: angle === 'deg' ? 'Углы в градусах, переключить на радианы' : 'Углы в радианах, переключить на градусы',
     },
-    sin: inv ? sci('sin', 'sin⁻¹', 'asin(', 'Арксинус') : sci('sin', 'sin', 'sin(', 'Синус'),
-    cos: inv ? sci('cos', 'cos⁻¹', 'acos(', 'Арккосинус') : sci('cos', 'cos', 'cos(', 'Косинус'),
-    tan: inv ? sci('tan', 'tan⁻¹', 'atan(', 'Арктангенс') : sci('tan', 'tan', 'tan(', 'Тангенс'),
-    lg: inv ? sci('lg', '10ˣ', '10^', 'Десять в степени') : sci('lg', 'lg', 'lg(', 'Десятичный логарифм'),
-    ln: inv ? sci('ln', 'eˣ', 'e^', 'e в степени') : sci('ln', 'ln', 'ln(', 'Натуральный логарифм'),
-    e: sci('e', 'e', 'e', 'Число e'),
-    open: sci('open', '(', '(', 'Открыть скобку'),
-    close: sci('close', ')', ')', 'Закрыть скобку'),
+    toggle: {
+      id: 'toggle',
+      icon: sciOpen ? 'chevron-up' : 'chevron-down',
+      kind: 'sci',
+      aria: sciOpen ? 'Скрыть функции' : 'Показать все функции',
+      pressed: sciOpen,
+    },
   })
 
-  // phone: 5 columns, first row always visible; wide screen: 3 columns next to the main keys
-  const PHONE = ['root', 'pow', 'pi', 'fact', 'toggle', 'inv', 'angle', 'sin', 'cos', 'tan', 'lg', 'ln', 'e', 'open', 'close']
-  const WIDE = ['inv', 'angle', 'recip', 'sin', 'cos', 'tan', 'root', 'pow', 'fact', 'lg', 'ln', 'pi', 'open', 'close', 'e']
+  // phone: 6 columns, the first row (cursor, fraction, root, square) is always there;
+  // wide screen: 4 columns next to the main keys
+  const PHONE = [
+    'left', 'frac', 'root', 'square', 'right', 'toggle',
+    'pow', 'nroot', 'pi', 'e', 'fact', 'abs',
+    'inv', 'angle', 'sin', 'cos', 'tan', 'log',
+    'lg', 'ln', 'open', 'close', 'recip', 'degree',
+  ]
+  const WIDE = [
+    'inv', 'angle', 'left', 'right',
+    'frac', 'root', 'square', 'pow',
+    'sin', 'cos', 'tan', 'nroot',
+    'lg', 'ln', 'log', 'pi',
+    'abs', 'recip', 'fact', 'e',
+  ]
 
-  const sciVisible = $derived(wide ? WIDE : sciOpen ? PHONE : PHONE.slice(0, 5))
+  const sciVisible = $derived(wide ? WIDE : sciOpen ? PHONE : PHONE.slice(0, 6))
 
-  // keep the cursor in the expression field: buttons must not take focus on mouse/touch
+  // keep the cursor in the formula: buttons must not take focus on mouse/touch
   function keepFocus(e: MouseEvent) {
     e.preventDefault()
   }
@@ -100,7 +142,13 @@
     onmousedown={keepFocus}
     onclick={() => onkey(key)}
   >
-    {#if key.icon}<Icon name={key.icon} size={26} />{:else}{key.label}{/if}
+    {#if key.icon}
+      <Icon name={key.icon} size={26} />
+    {:else if key.labelLatex}
+      <span class="formula" aria-hidden="true">{@html latexMarkup(key.labelLatex)}</span>
+    {:else}
+      {key.label}
+    {/if}
   </button>
 {/snippet}
 
@@ -123,17 +171,17 @@
     gap: 8px;
     padding: 8px 12px 12px;
     --row: clamp(52px, 8.6dvh, 76px);
-    --sci-row: clamp(40px, 5.6dvh, 50px);
+    --sci-row: clamp(42px, 5.8dvh, 52px);
   }
 
-  /* two more rows of scientific keys must fit on a small phone */
+  /* more rows of functions must fit on a small phone */
   .pad.sci-open {
-    --row: clamp(44px, 7dvh, 76px);
-    --sci-row: clamp(36px, 5dvh, 50px);
+    --row: clamp(44px, 6.6dvh, 76px);
+    --sci-row: clamp(38px, 4.8dvh, 50px);
   }
 
   .pad.wide {
-    grid-template-columns: 3fr 4fr;
+    grid-template-columns: 4fr 4fr;
     gap: 12px;
     padding: 12px 16px 16px;
     --row: clamp(52px, 9dvh, 72px);
@@ -146,12 +194,19 @@
   }
 
   .sci-keys {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     grid-auto-rows: var(--sci-row);
+    gap: 6px;
   }
 
   .wide .sci-keys {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: var(--row);
+    gap: 8px;
+  }
+
+  .basic-keys {
+    grid-template-columns: repeat(4, 1fr);
     grid-auto-rows: var(--row);
   }
 
@@ -164,7 +219,8 @@
       --row: clamp(32px, calc((100dvh - 190px) / 5), 60px);
     }
     .sci-keys,
-    .basic-keys {
+    .basic-keys,
+    .wide .sci-keys {
       gap: 6px;
     }
     .key {
@@ -176,15 +232,11 @@
     }
   }
 
-  .basic-keys {
-    grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: var(--row);
-  }
-
   .key {
     display: grid;
     place-items: center;
     min-width: 0;
+    overflow: hidden;
     border-radius: var(--radius);
     font-size: 26px;
     font-weight: 400;
@@ -228,7 +280,7 @@
   .key.sci {
     background: transparent;
     box-shadow: none;
-    font-size: 18px;
+    font-size: 17px;
     color: var(--text);
     border-radius: var(--radius-sm);
   }
@@ -251,10 +303,26 @@
   .wide .key.sci {
     background: var(--key-fn);
     border-radius: var(--radius);
-    font-size: 20px;
+    font-size: 19px;
   }
 
   .wide .key.sci.pressed {
     background: var(--key-op);
+  }
+
+  /* formulas on the keys: small enough for the empty boxes to fit */
+  .formula {
+    font-size: 16px;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .wide .formula {
+    font-size: 18px;
+  }
+
+  /* the empty boxes ("put a number here") are drawn lighter than the symbols */
+  .formula :global(.ML__ams) {
+    color: var(--muted);
   }
 </style>

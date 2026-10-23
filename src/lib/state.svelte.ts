@@ -15,9 +15,10 @@ const DEFAULT_SETTINGS: Settings = { theme: 'system', angle: 'deg', decimal: ','
 
 export const settings = $state<Settings>({ ...DEFAULT_SETTINGS, ...load<Partial<Settings>>('settings', {}) })
 
-export const ui = $state<{ tab: Tab; expr: string; sciOpen: boolean }>({
+/** `latex` is the content of the textbook-style calculator field. */
+export const ui = $state<{ tab: Tab; latex: string; sciOpen: boolean }>({
   tab: 'calc',
-  expr: '',
+  latex: '',
   sciOpen: false,
   ...load('ui', {}),
 })
@@ -30,9 +31,15 @@ export const prefersDark = new MediaQuery('prefers-color-scheme: dark')
 // ---- history ----
 
 export interface HistoryEntry {
-  expr: string
+  /** The formula as typed (LaTeX); entries from the first version only have `expr`. */
+  latex?: string
+  expr?: string
+  /** The answer as a decimal: shown and plain (for copying and inserting). */
   text: string
   plain: string
+  /** The answer as a textbook fraction, when there is one, and whether it was shown that way. */
+  fraction?: string
+  showFraction?: boolean
   at: number
 }
 

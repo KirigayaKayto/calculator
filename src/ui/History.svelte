@@ -1,12 +1,13 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import Icon from './Icon.svelte'
-  import { history } from '../lib/state.svelte'
+  import { history, settings, type HistoryEntry } from '../lib/state.svelte'
+  import { latexMarkup, numberLatex } from '../lib/markup'
 
   interface Props {
-    /** Called with an expression or a result to put into the calculator. */
-    onpick: (text: string) => void
-    /** Inside the display on phones: no heading, newest entry right above the expression. */
+    /** Called with an entry and the part to put into the calculator. */
+    onpick: (entry: HistoryEntry, part: 'expr' | 'result') => void
+    /** Inside the display on phones: no heading, newest entry right above the formula. */
     compact?: boolean
   }
 
@@ -25,7 +26,7 @@
     tick().then(scrollToNewest)
   })
 
-  // the list shrinks when the scientific keys open: keep the newest entries in view
+  // the list shrinks when the function keys open: keep the newest entries in view
   $effect(() => {
     if (!list) return
     const observer = new ResizeObserver(scrollToNewest)
@@ -69,14 +70,20 @@
     {/if}
     {#each history.items as item (item.at)}
       <li>
-        <button class="expr num" title="Вставить выражение" onclick={() => onpick(item.expr)}>{item.expr}</button>
-        <button class="result num" title="Вставить результат" onclick={() => onpick(item.plain)}>= {item.text}</button>
+        <button class="expr" title="Вставить пример" onclick={() => onpick(item, 'expr')}>
+          {#if item.latex}{@html latexMarkup(item.latex)}{:else}{item.expr}{/if}
+        </button>
+        <button class="result" title="Вставить ответ" onclick={() => onpick(item, 'result')}>
+          {@html latexMarkup(
+            '=' + (item.showFraction && item.fraction ? item.fraction : numberLatex(item.plain, settings.decimal, true)),
+          )}
+        </button>
       </li>
     {/each}
   </ol>
 
   {#if !compact && !history.items.length}
-    <p class="empty">Здесь появятся ваши вычисления. Нажмите на запись, чтобы вставить её.</p>
+    <p class="empty">Здесь появятся ваши вычисления. Нажмите на пример или ответ, чтобы вставить его.</p>
   {/if}
 </section>
 
@@ -111,15 +118,15 @@
     overscroll-behavior: contain;
   }
 
+  .compact ol {
+    scrollbar-width: none;
+  }
+
   li {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     padding: 6px 0;
-  }
-
-  .compact ol {
-    scrollbar-width: none;
   }
 
   .compact li {
@@ -133,6 +140,8 @@
     border-radius: 8px;
     padding: 2px 8px;
     min-height: 32px;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   li button:hover {
@@ -141,11 +150,15 @@
 
   .expr {
     color: var(--muted);
-    font-size: 16px;
+    font-size: 18px;
   }
 
   .result {
-    font-size: 20px;
+    font-size: 21px;
+  }
+
+  .compact .expr {
+    font-size: 16px;
   }
 
   .compact .result {

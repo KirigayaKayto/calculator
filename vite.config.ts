@@ -6,8 +6,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   // relative paths: works both locally and from a GitHub Pages subfolder
   base: './',
-  // mathjs is most of the bundle; it is downloaded once and then served from the offline cache
-  build: { chunkSizeWarningLimit: 800 },
+  // mathjs and MathLive are most of the bundle; it is downloaded once and then served from the offline cache
+  build: { chunkSizeWarningLimit: 2000 },
   plugins: [
     svelte(),
     VitePWA({
@@ -31,7 +31,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),
   ],

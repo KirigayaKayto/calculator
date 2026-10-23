@@ -1,6 +1,7 @@
 import { math, Scope, calculatorFunctions, type Angle } from './math'
 import { normalize, closeParens, type DecimalMark } from './input'
 import { formatValue } from './format'
+import { latexToExpr, IncompleteError } from './latex'
 
 export interface CalcSettings {
   angle: Angle
@@ -10,8 +11,11 @@ export interface CalcSettings {
 
 export type CalcResult =
   | { ok: true; value: unknown; text: string; plain: string }
-  /** `unknown` is the name of an undefined symbol, if that is what failed. */
-  | { ok: false; error: string; unknown?: string }
+  /**
+   * `unknown` is the name of an undefined symbol, if that is what failed;
+   * `incomplete` means the formula still has empty boxes.
+   */
+  | { ok: false; error: string; unknown?: string; incomplete?: boolean }
 
 const scopeBases = new Map<Angle, Map<string, unknown>>()
 
@@ -61,8 +65,28 @@ export function evaluateNormalized(expr: string, settings: CalcSettings, scope: 
   }
 }
 
-/** Evaluate what the person typed in the calculator field. */
+/** Evaluate a line of text: the notebook and the converter fields. */
 export function calculate(input: string, settings: CalcSettings, scope = newScope(settings.angle)): CalcResult {
   const expr = closeParens(normalize(input, { decimal: settings.decimal }))
   return evaluateNormalized(expr, settings, scope)
+}
+
+/**
+ * Evaluate the textbook-style calculator field (LaTeX). `prefix` is prepended to the converted
+ * expression: the calculator uses it to continue from the exact previous answer.
+ */
+export function calculateLatex(
+  latex: string,
+  settings: CalcSettings,
+  scope = newScope(settings.angle),
+  prefix = '',
+): CalcResult {
+  let expr: string
+  try {
+    expr = prefix + latexToExpr(latex)
+  } catch (e) {
+    return { ok: false, error: translateError(e), incomplete: e instanceof IncompleteError }
+  }
+  // LaTeX already spells the decimal comma as {,}, so here "," only separates arguments
+  return evaluateNormalized(closeParens(normalize(expr, { decimal: '.' })), settings, scope)
 }

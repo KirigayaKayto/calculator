@@ -146,6 +146,42 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* The textbook-style formula field (MathLive). */
+math-field {
+  display: block;
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: inherit;
+  --caret-color: var(--accent-text);
+  --primary-color: var(--accent-text);
+  --selection-background-color: var(--key-op);
+  --selection-color: var(--text);
+  /* the fraction or root the cursor is in gets a soft yellow tint */
+  --contains-highlight-background-color: color-mix(in srgb, var(--key-eq) 16%, transparent);
+  --placeholder-color: var(--muted);
+  --placeholder-opacity: 0.55;
+  --smart-fence-color: var(--muted);
+  --smart-fence-opacity: 0.6;
+}
+
+math-field:focus,
+math-field:focus-within {
+  outline: none;
+}
+
+math-field::part(menu-toggle),
+math-field::part(virtual-keyboard-toggle) {
+  display: none;
+}
+
+/* formulas drawn as static HTML (history, answers, key labels) follow the text color */
+.ML__latex {
+  color: inherit;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
