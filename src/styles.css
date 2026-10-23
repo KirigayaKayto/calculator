@@ -1,0 +1,156 @@
+/* Colors: warm neutrals and a yellow "=" key, in the spirit of Braun calculators. */
+:root {
+  color-scheme: light;
+  --bg: #eeece7;
+  --surface: #f7f6f2;
+  --key: #fbfaf7;
+  --key-fn: #e2dfd8;
+  --key-op: #d6d2c8;
+  --key-eq: #f2a900;
+  --key-eq-text: #1d1c1a;
+  --key-active: #cfcac0;
+  --text: #1d1c1a;
+  --muted: #6b675f;
+  --accent-text: #8a5e00;
+  --error: #b3261e;
+  --border: #d6d2c8;
+  --focus: #1d1c1a;
+  --shadow: 0 1px 0 rgb(0 0 0 / 0.06);
+  --scrim: rgb(20 20 19 / 0.45);
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', Consolas, monospace;
+  --fast: 90ms;
+  --normal: 180ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #141413;
+    --surface: #1b1a19;
+    --key: #262523;
+    --key-fn: #33312d;
+    --key-op: #3d3a35;
+    --key-active: #4a4741;
+    --text: #f2f0eb;
+    --muted: #a29e95;
+    --accent-text: #f2b731;
+    --error: #ff8a80;
+    --border: #34322e;
+    --focus: #f2f0eb;
+    --shadow: none;
+    --scrim: rgb(0 0 0 / 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #141413;
+  --surface: #1b1a19;
+  --key: #262523;
+  --key-fn: #33312d;
+  --key-op: #3d3a35;
+  --key-active: #4a4741;
+  --text: #f2f0eb;
+  --muted: #a29e95;
+  --accent-text: #f2b731;
+  --error: #ff8a80;
+  --border: #34322e;
+  --focus: #f2f0eb;
+  --shadow: none;
+  --scrim: rgb(0 0 0 / 0.6);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#app {
+  height: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+  padding: 0;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--text);
+  transition: background-color var(--fast);
+}
+
+.icon-btn:hover {
+  background: var(--key-fn);
+}
+
+.icon-btn:active {
+  background: var(--key-active);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
