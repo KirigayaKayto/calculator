@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { calculate, type CalcSettings } from '../src/engine/calc'
-import { evaluateNotebook } from '../src/engine/notebook'
 import { formatBig, type FormatMode } from '../src/engine/format'
 import { math } from '../src/engine/math'
 
@@ -129,30 +128,5 @@ describe('number formats', () => {
   })
   it('applies to units too', () => {
     expect(calc('2 kg + 333 g', { format: 'fix', digits: 1 })).toBe('2.3 kg')
-  })
-})
-
-describe('notes', () => {
-  const lines = (src: string[]) =>
-    evaluateNotebook(src.join('\n'), BASE).map((r) =>
-      r.kind === 'value' ? r.text : r.kind === 'error' ? `ERR: ${r.error}` : r.kind,
-    )
-
-  it('keeps variables, totals and labels', () => {
-    expect(
-      lines(['Rent: 30 000', 'food = 15 000', 'total', 'total * 12', '', 'prev / 2', 'rent = 25 000', 'rent * 12']),
-    ).toEqual([g('30 000'), g('15 000'), g('45 000'), g('540 000'), 'empty', g('270 000'), g('25 000'), g('300 000')])
-  })
-  it('treats words as text', () => {
-    expect(lines(['5 apples', 'Hello there', '# note', 'x + 1', '2 kg apples'])).toEqual([
-      '5',
-      'text',
-      'empty',
-      'ERR: Undefined variable: x',
-      '2 kg',
-    ])
-  })
-  it('starts a new block after a heading', () => {
-    expect(lines(['10', '20', 'Food:', '5', 'total'])).toEqual(['10', '20', 'empty', '5', '5'])
   })
 })

@@ -4,9 +4,11 @@ import type { CalcSettings } from '../engine/calc'
 import type { Angle } from '../engine/math'
 import type { DecimalMark } from '../engine/input'
 import type { FormatMode } from '../engine/format'
+import type { Line } from '../graph/model'
+import type { ViewState } from '../ui/GraphCanvas.svelte'
 
 export type Theme = 'system' | 'light' | 'dark'
-export type Tab = 'calc' | 'notes' | 'units'
+export type Tab = 'calc' | 'graph' | 'units'
 
 export interface Settings {
   theme: Theme
@@ -113,39 +115,27 @@ export function addHistory(entry: HistoryEntry) {
   if (history.items.length > HISTORY_LIMIT) history.items.splice(0, history.items.length - HISTORY_LIMIT)
 }
 
-// ---- notes ----
+// ---- graph worksheet ----
 
-export interface Sheet {
-  id: string
-  title: string
-  text: string
+/** Curve colours, readable on both the light and the dark background. */
+export const PALETTE = ['#d9453f', '#2f74c0', '#3a9a4f', '#7a52c7', '#e8780f', '#12968f']
+
+export const newId = () => Math.random().toString(36).slice(2, 10)
+
+function exampleGraph(): { lines: Line[]; view: ViewState; selected: string | null } {
+  const lines = [
+    'f(x)=\\frac{x^3}{6}-x',
+    "f^{\\prime}(x)",
+    '\\int_{-1}^{2}f(x)\\,dx',
+    'a=1',
+    'y=a\\sin\\left(x\\right)',
+  ].map((latex, i) => ({ id: newId(), latex, color: PALETTE[i % PALETTE.length] }))
+  return { lines, view: { cx: 0, cy: 0, scale: 45 }, selected: null }
 }
 
-const EXAMPLE = `# Notes: one calculation per line, the answer appears on the right
-Rent: 1 200
-food = 450
-transport = 90
-total
-total * 12
-
-# Variables can be used further down
-food / 30
-
-# Units
-5 km to m
-2 kg + 300 g
-9.81 m/s^2 * 2 s`
-
-export function newSheet(title = 'New sheet', text = ''): Sheet {
-  return { id: Math.random().toString(36).slice(2, 10), title, text }
-}
-
-function initialNotebook() {
-  const sheet = newSheet('Example', EXAMPLE)
-  return { sheets: [sheet], current: sheet.id }
-}
-
-export const notebook = $state<{ sheets: Sheet[]; current: string }>(load('notes-v2', null) ?? initialNotebook())
+export const graph = $state<{ lines: Line[]; view: ViewState; selected: string | null }>(
+  load('graph-v1', null) ?? exampleGraph(),
+)
 
 // ---- unit converter ----
 
@@ -210,6 +200,6 @@ $effect.root(() => {
   $effect(() => save('settings-v2', $state.snapshot(settings)))
   $effect(() => save('ui-v2', $state.snapshot(ui)))
   $effect(() => save('history', $state.snapshot(history.items)))
-  $effect(() => save('notes-v2', $state.snapshot(notebook)))
+  $effect(() => save('graph-v1', $state.snapshot(graph)))
   $effect(() => save('converter-v2', $state.snapshot(converter)))
 })

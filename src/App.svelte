@@ -1,6 +1,6 @@
 <script lang="ts">
   import Calculator from './ui/Calculator.svelte'
-  import Notebook from './ui/Notebook.svelte'
+  import Worksheet from './ui/Worksheet.svelte'
   import Tools from './ui/Tools.svelte'
   import Settings from './ui/Settings.svelte'
   import Icon from './ui/Icon.svelte'
@@ -8,9 +8,12 @@
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'calc', label: 'Calculator' },
-    { id: 'notes', label: 'Notes' },
+    { id: 'graph', label: 'Graph' },
     { id: 'units', label: 'Tools' },
   ]
+
+  // a tab saved by an older version (the notes) opens the calculator
+  if (!TABS.some((t) => t.id === ui.tab)) ui.tab = 'calc'
 
   let settingsOpen = $state(false)
 
@@ -60,8 +63,8 @@
     <div class="panel" id="panel" role="tabpanel" aria-labelledby="tab-{ui.tab}">
       {#if ui.tab === 'calc'}
         <Calculator />
-      {:else if ui.tab === 'notes'}
-        <Notebook />
+      {:else if ui.tab === 'graph'}
+        <Worksheet />
       {:else}
         <Tools />
       {/if}

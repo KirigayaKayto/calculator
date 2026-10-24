@@ -8,6 +8,11 @@ import { CONSTANT_BY_ID, constantVar } from './constants'
 export interface LatexOptions {
   /** 2½ means 2 + ½ (school); by default a number before a fraction multiplies it (university). */
   mixedNumbers?: boolean
+  /**
+   * Letters side by side are separate variables: ax = a·x (the graph). Otherwise they make a
+   * word, so units typed as letters keep working in the calculator: 5 km.
+   */
+  splitLetters?: boolean
 }
 
 type Token = { t: 'cmd' | 'ch' | 'text' | 'op'; v: string }
@@ -100,6 +105,8 @@ const FUNCTIONS: Record<string, string> = {
   nPr: 'permutations',
   gcd: 'gcd',
   lcm: 'lcm',
+  max: 'max',
+  min: 'min',
   sign: 'sign',
   sgn: 'sign',
   det: 'det',
@@ -138,8 +145,31 @@ const SYMBOLS: Record<string, string> = {
   // unit conversion: 5 km → m
   to: ' to ',
   rightarrow: ' to ',
-  // a measurement with its uncertainty, 2.50 ± 0.02; see uncertainty.ts
+  // a measurement with its uncertainty, 2.50 ± 0.02; see lab.ts
   pm: ' ± ',
+  // relations, for equations and inequalities in the graph
+  le: '<=',
+  leq: '<=',
+  ge: '>=',
+  geq: '>=',
+  lt: '<',
+  gt: '>',
+  // f′(x): the derivative of a function defined in the graph
+  prime: '__prime',
+  // Greek letters used as variables
+  alpha: ' alpha ',
+  beta: ' beta ',
+  gamma: ' gamma ',
+  delta: ' delta ',
+  theta: ' theta ',
+  lambda: ' lambda ',
+  mu: ' mu ',
+  rho: ' rho ',
+  tau: ' tau ',
+  phi: ' phi ',
+  varphi: ' phi ',
+  omega: ' omega ',
+  Delta: ' Delta ',
   ',': ' ',
   ';': ' ',
   ':': ' ',
@@ -319,6 +349,56 @@ class Parser {
     return env === 'vmatrix' ? `det(${matrix})` : matrix
   }
 
+  /** "d" over "dx" is d/dx; "d^(2)" over "dx^(2)" is d²/dx². */
+  private derivativeOrder(num: string, den: string): { order: number; variable: string } | null {
+    const n = num.replace(/\s+/g, '')
+    const m = /^d([a-zA-Z])(?:\^\((\d)\))?$/.exec(den.replace(/\s+/g, ''))
+    if (!m) return null
+    const order = n === 'd' ? 1 : Number(/^d\^\((\d)\)$/.exec(n)?.[1] ?? 0)
+    return order && order === Number(m[2] ?? 1) ? { order, variable: m[1] } : null
+  }
+
+  /**
+   * ∫ₐᵇ f(x) dx → __int(a, b, f(x), "x"), which the graph integrates numerically.
+   * The differential "dx" closes the integrand.
+   */
+  private integral(): string {
+    let lower: string | null = null
+    let upper: string | null = null
+    for (;;) {
+      if (this.isCh(this.peek(), '_')) {
+        this.i++
+        lower = this.arg()
+      } else if (this.isCh(this.peek(), '^')) {
+        this.i++
+        upper = this.arg()
+      } else break
+    }
+    let end = -1
+    let depth = 0
+    for (let j = this.i; j < this.toks.length; j++) {
+      const t = this.toks[j]
+      if (this.isCh(t, '{') || this.isCmd(t, LEFT)) depth++
+      else if (this.isCh(t, '}') || this.isCmd(t, RIGHT)) {
+        if (depth === 0) break
+        depth--
+      } else if (depth === 0 && this.isCh(t, 'd') && /^[a-zA-Z]$/.test(this.toks[j + 1]?.v ?? '') && this.toks[j + 1].t === 'ch') {
+        const after = this.toks[j + 2]
+        if (!after || this.isCh(after, '}') || this.isCmd(after, RIGHT) || (after.t === 'ch' && /[-+=<>,)]/.test(after.v))) {
+          end = j
+          break
+        }
+      }
+    }
+    if (end < 0) throw new CalcError('End the integral with dx')
+    const variable = this.toks[end + 1].v
+    const integrand = this.seq(() => this.i === end)
+    this.i = end + 2
+    if (!integrand.trim()) throw new IncompleteError()
+    if (lower === null || upper === null) throw new CalcError('Indefinite integrals: use the Calculator')
+    return ` __int(${lower},${upper},${integrand},"${variable}")`
+  }
+
   /** ⌊x⌋ and ⌈x⌉ written without \left and \right. */
   private bracketed(fn: string, close: string): string {
     const inner = this.seq((t) => t.t === 'cmd' && t.v === close)
@@ -412,6 +492,8 @@ class Parser {
           if (exponent === 'deg') return `${out} deg`
           // Aᵀ, the transpose
           if (exponent === 'T') return `${out}'`
+          // f′ and f″ become the names f__prime and f__prime__prime
+          if (/^(?:__prime)+$/.test(exponent.replace(/\s+/g, ''))) return out.trimEnd() + exponent.replace(/\s+/g, '')
           return `${out}^(${exponent})`
         }
         case '_':
@@ -426,6 +508,7 @@ class Parser {
         case ']':
           return `${out})`
         default:
+          if (this.options.splitLetters && /^[A-Za-z]$/.test(tok.v) && /\w$/.test(out)) return `${out} ${tok.v}`
           return out + tok.v
       }
     }
@@ -434,6 +517,13 @@ class Parser {
     if (FRACTIONS.has(cmd)) {
       const num = this.arg()
       const den = this.arg()
+      // d/dx (…), d²/dx² (…): numerically evaluable only in the graph, symbolically by the CAS
+      const d = this.derivativeOrder(num, den)
+      if (d) {
+        let inner = unwrap(this.functionArgument())
+        for (let k = 0; k < d.order; k++) inner = `__d${d.variable}(${inner})`
+        return `${out} ${inner}`
+      }
       const whole = this.options.mixedNumbers ? out.match(TRAILING_INTEGER) : null
       if (whole && INTEGER.test(num.trim()) && INTEGER.test(den.trim())) {
         return `${out.slice(0, out.length - whole[1].length)}(${whole[1]}+${num.trim()}/${den.trim()})`
@@ -448,6 +538,7 @@ class Parser {
     if (cmd === 'lfloor') return out + this.bracketed('floor', 'rfloor')
     if (cmd === 'lceil') return out + this.bracketed('ceil', 'rceil')
     if (cmd === 'begin') return out + this.environment()
+    if (cmd === 'int') return out + this.integral()
     if (CONSTANT_BY_ID[cmd]) return `${out} ${constantVar(cmd)} `
     if (cmd === 'sqrt') {
       const n = this.optionalArg()

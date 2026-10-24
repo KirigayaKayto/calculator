@@ -15,9 +15,11 @@
     inv: boolean
     /** Wide screen: the 123 page always on the right, another page on the left. */
     wide: boolean
+    /** Lower keys, when the keypad shares the screen with a list (the graph). */
+    compact?: boolean
   }
 
-  let { onkey, onpage, page, decimal, angle, inv, wide }: Props = $props()
+  let { onkey, onpage, page, decimal, angle, inv, wide, compact = false }: Props = $props()
 
   /** A key as shown right now: its INV variant, the decimal mark, the angle unit. */
   function resolve(id: string): Key {
@@ -65,7 +67,7 @@
   </button>
 {/snippet}
 
-<div class="pad" class:wide>
+<div class="pad" class:wide class:compact>
   <div class="bar">
     <button class="nav" aria-label="Move cursor left" onmousedown={keepFocus} onclick={() => onkey(KEYS.left, shown.id)}>
       <Icon name="chevron-left" size={22} />
@@ -115,6 +117,10 @@
   .pad.wide {
     padding: 10px 16px 16px;
     --row: clamp(48px, 8.6dvh, 68px);
+  }
+
+  .pad.compact {
+    --row: clamp(38px, 5.6dvh, 54px);
   }
 
   .bar {
