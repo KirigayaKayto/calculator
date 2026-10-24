@@ -1,7 +1,7 @@
 import type { BigNumber } from 'mathjs'
 import { math } from './math'
 
-/** A result as a textbook fraction: −3½ is { negative, whole: '3', num: '1', den: '2' }. */
+/** A result as a fraction: −3½ (= −7/2) is { negative, whole: '3', num: '1', den: '2' }. */
 export interface Fraction {
   negative: boolean
   whole: string
@@ -30,10 +30,14 @@ export function toFraction(value: unknown): Fraction | null {
   }
 }
 
-export function fractionLatex(f: Fraction): string {
+/** 7/2 as an improper fraction, or 3½ when `mixed`. */
+export function fractionLatex(f: Fraction, mixed = false): string {
   const sign = f.negative ? '-' : ''
-  const frac = `\\frac{${f.num}}{${f.den}}`
-  return f.whole === '0' ? sign + frac : sign + f.whole + frac
+  if (!mixed || f.whole === '0') {
+    const num = BigInt(f.whole) * BigInt(f.den) + BigInt(f.num)
+    return `${sign}\\frac{${num}}{${f.den}}`
+  }
+  return `${sign}${f.whole}\\frac{${f.num}}{${f.den}}`
 }
 
 /** For copying: 7/2, which every program understands, rather than 3 1/2. */

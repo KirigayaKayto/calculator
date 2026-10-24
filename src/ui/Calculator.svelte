@@ -1,22 +1,25 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { MathfieldElement } from 'mathlive'
-  import { calculateLatex, newScope, type CalcResult } from '../engine/calc'
+  import { calculate, calculateLatex, newScope, type CalcResult } from '../engine/calc'
   import { toFraction, fractionLatex, fractionPlain, prefersFraction } from '../engine/exact'
   import {
     settings,
+    calcSettings,
     ui,
-    currency,
     wide,
     short,
+    history,
     addHistory,
     haptic,
     copy,
     type HistoryEntry,
   } from '../lib/state.svelte'
   import { latexMarkup, numberLatex } from '../lib/markup'
-  import Keypad, { type Key } from './Keypad.svelte'
+  import Keypad from './Keypad.svelte'
+  import type { Key } from './keys'
   import History from './History.svelte'
+  import FormatChip from './FormatChip.svelte'
   import Icon from './Icon.svelte'
 
   // fonts come from mathlive/fonts.css (bundled, so they work offline); no key sounds
@@ -49,26 +52,40 @@
   /** What the field contained right after "=" (MathLive may rewrite the LaTeX we give it). */
   let answerLatex = $state('')
 
-  const CONTINUES = /^(?:[-+*/:^!)]|\\(?:cdot|times|div|%))/
+  const cs = $derived(calcSettings(settings))
+
+  /** Ans: the exact last answer, or the last one in the history after a restart. */
+  const ansValue = $derived.by(() => {
+    if (answer) return answer.value
+    const last = history.items.at(-1)
+    if (!last) return undefined
+    const r = calculate(last.plain, { ...cs, decimal: /\d,\d/.test(last.plain) ? ',' : '.' })
+    return r.ok ? r.value : undefined
+  })
+
+  const CONTINUES = /^(?:[-+*/:^!)]|\\(?:cdot|times|div|bmod|%))/
 
   function evaluate(latex: string): CalcResult {
-    const scope = newScope(settings.angle)
+    const scope = newScope(cs.angle)
+    if (ansValue !== undefined) scope.set('Ans', ansValue)
     if (answer && answerLatex && latex.startsWith(answerLatex)) {
       const rest = latex.slice(answerLatex.length).trimStart()
       if (rest === '' || CONTINUES.test(rest)) {
         scope.set('_ans', answer.value)
-        return calculateLatex(rest, settings, scope, '_ans')
+        return calculateLatex(rest, cs, scope, '_ans')
       }
     }
-    return calculateLatex(latex, settings, scope)
+    return calculateLatex(latex, cs, scope)
   }
 
-  const result = $derived.by(() => {
-    currency.version // recalculate when exchange rates arrive
-    return evaluate(ui.latex)
-  })
+  /** Fractions are the natural answer only in the automatic format and for fraction problems. */
+  function wantsFraction(latex: string) {
+    return settings.format === 'auto' && prefersFraction(latex)
+  }
+
+  const result = $derived(evaluate(ui.latex))
   const fraction = $derived(result.ok ? toFraction(result.value) : null)
-  const previewAsFraction = $derived(!!fraction && prefersFraction(ui.latex) !== flipped)
+  const previewAsFraction = $derived(!!fraction && wantsFraction(ui.latex) !== flipped)
   const showingAnswer = $derived(!!answer && ui.latex === answerLatex)
   // a bare number needs no "= …" under it
   const showPreview = $derived(result.ok && !showingAnswer && !/^-?[\d{},.\s]*$/.test(ui.latex))
@@ -160,13 +177,15 @@
     if (!latex.trim() || showingAnswer) return
     const r = evaluate(latex)
     if (!r.ok) {
-      error = r.error || 'Ошибка в выражении'
+      error = r.error || 'Syntax error'
       shake()
       return
     }
     const f = toFraction(r.value)
-    const asFraction = !!f && prefersFraction(latex) !== flipped
-    const fractionForm = f ? { latex: fractionLatex(f), plain: fractionPlain(f) } : null
+    const asFraction = !!f && wantsFraction(latex) !== flipped
+    const fractionForm = f
+      ? { latex: fractionLatex(f, settings.mixedNumbers), plain: fractionPlain(f) }
+      : null
     addHistory({
       latex,
       text: r.text,
@@ -175,7 +194,12 @@
       showFraction: asFraction,
       at: Date.now(),
     })
-    answer = { value: r.value, decimal: { latex: plainToLatex(r.plain), plain: r.plain }, fraction: fractionForm, asFraction }
+    answer = {
+      value: r.value,
+      decimal: { latex: plainToLatex(r.plain), plain: r.plain },
+      fraction: fractionForm,
+      asFraction,
+    }
     showAnswer(asFraction)
   }
 
@@ -194,7 +218,18 @@
     }
   }
 
-  function onkey(key: Key) {
+  /** The number format changed: show the answer in the field in the new format. */
+  function reformatAnswer() {
+    if (!showingAnswer || !answer) return focusField()
+    const r = evaluate(answerLatex)
+    if (r.ok) answer = { ...answer, decimal: { latex: plainToLatex(r.plain), plain: r.plain } }
+    showAnswer(answer.asFraction && settings.format === 'auto')
+    focusField()
+  }
+
+  const NO_RETURN = new Set(['inv', 'angle', 'left', 'right'])
+
+  function onkey(key: Key, page: string) {
     haptic()
     if (!mf) return
     focusField()
@@ -208,9 +243,6 @@
         return
       case 'angle':
         settings.angle = settings.angle === 'deg' ? 'rad' : 'deg'
-        return
-      case 'toggle':
-        ui.sciOpen = !ui.sciOpen
         return
       case 'back':
         justEvaluated = false
@@ -233,8 +265,10 @@
       default:
         if (key.typed) typed(key.typed, key.continues)
         else if (key.latex) insert(key.latex, key.continues)
-        if (inv && key.kind === 'sci') inv = false
+        inv = false
     }
+    // on a phone, a function page closes after use, like a menu
+    if (page !== 'main' && !sideBySide && settings.autoReturn && !NO_RETURN.has(key.id)) ui.page = 'main'
     sync()
   }
 
@@ -260,7 +294,7 @@
   function onWindowKeydown(e: KeyboardEvent) {
     if (!mf || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
     const target = e.target as HTMLElement
-    if (target === mf) return
+    if (target === mf || document.querySelector('dialog[open]')) return
     const onButton = target.tagName === 'BUTTON'
     if (target !== document.body && !onButton) return
     if (e.key.length === 1 && e.key !== ' ') {
@@ -310,7 +344,7 @@
     const field = new MathfieldElement()
     // our own keypad replaces both MathLive's keyboard and the phone's one
     field.mathVirtualKeyboardPolicy = 'manual'
-    field.setAttribute('aria-label', 'Пример')
+    field.setAttribute('aria-label', 'Expression')
     field.value = ui.latex
     // the remaining options need the field to be on the page
     host!.append(field)
@@ -319,14 +353,6 @@
     field.smartSuperscript = false
     field.menuItems = []
     field.placeholder = '0'
-    // Russian textbook names when typing on a keyboard
-    field.inlineShortcuts = {
-      ...field.inlineShortcuts,
-      tg: '\\operatorname{tg}',
-      ctg: '\\operatorname{ctg}',
-      arctg: '\\operatorname{arctg}',
-      lg: '\\lg',
-    }
     field.addEventListener('keydown', onFieldKeydown, { capture: true })
     field.addEventListener('input', sync)
     field.addEventListener('pointerdown', () => (justEvaluated = false))
@@ -355,6 +381,8 @@
       <div class="field {sizeClass}" class:shaking bind:this={host}></div>
 
       <div class="result-row" aria-live="polite">
+        <FormatChip onchange={reformatAnswer} />
+        <span class="spacer"></span>
         {#if error}
           <span class="error">{error}</span>
         {:else if showPreview && result.ok}
@@ -362,18 +390,18 @@
             {@html latexMarkup(
               '=' +
                 (previewAsFraction && fraction
-                  ? fractionLatex(fraction)
+                  ? fractionLatex(fraction, settings.mixedNumbers)
                   : numberLatex(result.plain, settings.decimal, true)),
             )}
           </span>
         {/if}
-        {#if (showPreview && fraction) || (showingAnswer && answer?.fraction)}
+        {#if !error && ((showPreview && fraction) || (showingAnswer && answer?.fraction))}
           <button
             class="icon-btn"
             aria-label={(showingAnswer ? answer?.asFraction : previewAsFraction)
-              ? 'Показать десятичной дробью'
-              : 'Показать обыкновенной дробью'}
-            title="Дробь ⇄ десятичная"
+              ? 'Show as a decimal'
+              : 'Show as a fraction'}
+            title="Fraction ⇄ decimal"
             onmousedown={(e) => e.preventDefault()}
             onclick={flip}
           >
@@ -383,7 +411,7 @@
         {#if !error && (showPreview || showingAnswer)}
           <button
             class="icon-btn"
-            aria-label="Скопировать ответ"
+            aria-label="Copy the answer"
             onmousedown={(e) => e.preventDefault()}
             onclick={copyShown}
           >
@@ -393,7 +421,15 @@
       </div>
     </div>
 
-    <Keypad {onkey} decimal={settings.decimal} angle={settings.angle} {inv} sciOpen={ui.sciOpen} wide={sideBySide} />
+    <Keypad
+      {onkey}
+      onpage={(p) => (ui.page = p)}
+      page={ui.page}
+      decimal={settings.decimal}
+      angle={settings.angle}
+      {inv}
+      wide={sideBySide}
+    />
   </div>
 
   {#if historyAside}
@@ -427,7 +463,7 @@
     padding: 8px 12px 4px;
     border-radius: 20px;
     background: var(--surface);
-    overflow: hidden;
+    min-width: 0;
   }
 
   .wide .display {
@@ -480,8 +516,11 @@
     min-height: 52px;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     gap: 2px;
+  }
+
+  .spacer {
+    flex: 1;
   }
 
   .preview {
@@ -493,10 +532,10 @@
   }
 
   .error {
-    margin-right: auto;
-    font-size: 17px;
+    font-size: 16px;
     color: var(--error);
     font-weight: 500;
+    text-align: right;
   }
 
   .result-row .icon-btn {

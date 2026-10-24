@@ -2,17 +2,16 @@
  * Textbook-style input (MathLive) produces LaTeX; this turns it into an expression mathjs understands.
  * Only what the calculator can produce or a person can type is supported.
  */
+import { CalcError, IncompleteError } from './errors'
 
-/** The formula still has empty boxes (placeholders) to fill. */
-export class IncompleteError extends Error {
-  constructor() {
-    super('Заполните пустые места')
-  }
+export interface LatexOptions {
+  /** 2½ means 2 + ½ (school); by default a number before a fraction multiplies it (university). */
+  mixedNumbers?: boolean
 }
 
 type Token = { t: 'cmd' | 'ch' | 'text' | 'op'; v: string }
 
-/** Commands whose argument is plain text: \text{км}, \operatorname{tg}. */
+/** Commands whose argument is plain text: \text{m}, \operatorname{nCr}. */
 const TEXT_COMMANDS: Record<string, Token['t']> = {
   text: 'text',
   textrm: 'text',
@@ -47,7 +46,7 @@ function tokenize(src: string): Token[] {
         while (src[i] === ' ') i++
         if (src[i] === '{') {
           const [content, end] = readGroup(src, i)
-          // MathLive nests styles: \operatorname{\mathrm{tg}}
+          // MathLive nests styles: \operatorname{\mathrm{nCr}}
           const plain = content
             .replace(/\\(?:mathrm|mathit|text|textrm|textit|mbox|operatorname)\s*\{([^{}]*)\}/g, '$1')
             .replace(/\\[,;:! ]/g, ' ')
@@ -68,7 +67,7 @@ function tokenize(src: string): Token[] {
   return out
 }
 
-/** Russian textbook names included: tg, ctg, arctg. */
+/** LaTeX function names → calculator functions; tg, ctg, lg are the European spellings. */
 const FUNCTIONS: Record<string, string> = {
   sin: 'sin',
   cos: 'cos',
@@ -76,17 +75,40 @@ const FUNCTIONS: Record<string, string> = {
   tg: 'tan',
   cot: 'cot',
   ctg: 'cot',
+  sec: 'sec',
+  csc: 'csc',
   arcsin: 'asin',
   arccos: 'acos',
   arctan: 'atan',
   arctg: 'atan',
+  arccot: 'acot',
   sinh: 'sinh',
   cosh: 'cosh',
   tanh: 'tanh',
+  arsinh: 'asinh',
+  arcosh: 'acosh',
+  artanh: 'atanh',
   ln: 'ln',
   lg: 'lg',
   log: 'log',
   exp: 'exp',
+  nCr: 'combinations',
+  nPr: 'permutations',
+  gcd: 'gcd',
+  lcm: 'lcm',
+  sign: 'sign',
+  sgn: 'sign',
+}
+
+/** sin⁻¹ x is arcsin x, not 1/sin x. */
+const INVERSE: Record<string, string> = {
+  sin: 'asin',
+  cos: 'acos',
+  tan: 'atan',
+  cot: 'acot',
+  sinh: 'asinh',
+  cosh: 'acosh',
+  tanh: 'atanh',
 }
 
 const SYMBOLS: Record<string, string> = {
@@ -102,6 +124,8 @@ const SYMBOLS: Record<string, string> = {
   degree: ' deg',
   circ: ' deg',
   '%': '%',
+  bmod: ' mod ',
+  mod: ' mod ',
   ',': ' ',
   ';': ' ',
   ':': ' ',
@@ -122,6 +146,17 @@ const RIGHT = new Set(['right', 'mright', 'bigr', 'Bigr', 'biggr', 'Biggr'])
 const FRACTIONS = new Set(['frac', 'dfrac', 'tfrac', 'cfrac'])
 const IGNORED = new Set(['displaystyle', 'textstyle', 'mathbin', 'mathrel', 'mathord', 'mathop', 'limits', 'nolimits'])
 
+/** "(a,b)" → "a,b" when the outer parentheses belong together, so f((a,b)) does not get one argument. */
+function unwrap(s: string): string {
+  if (!s.startsWith('(') || !s.endsWith(')')) return s
+  let depth = 0
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '(') depth++
+    else if (s[i] === ')' && --depth === 0 && i < s.length - 1) return s
+  }
+  return s.slice(1, -1)
+}
+
 const INTEGER = /^\d+$/
 /** A whole number right before a fraction makes a mixed number: 2½ = 2 + ½. */
 const TRAILING_INTEGER = /(?<![\d.\p{L}_)])(\d+)$/u
@@ -131,7 +166,10 @@ class Parser {
   /** Inside |…| written with bare bars. */
   private absOpen = false
 
-  constructor(private toks: Token[]) {}
+  constructor(
+    private toks: Token[],
+    private options: LatexOptions,
+  ) {}
 
   private peek(offset = 0): Token | undefined {
     return this.toks[this.i + offset]
@@ -197,7 +235,8 @@ class Parser {
     if (tok.t === 'cmd') {
       if (['vert', 'lvert', 'rvert', '|', 'Vert'].includes(tok.v)) return '|'
       if (['{', 'lbrace', 'langle'].includes(tok.v)) return '('
-      if (['}', 'rbrace', 'rangle'].includes(tok.v)) return ')'
+      if (['}', 'rbrace', 'rangle', 'rfloor', 'rceil'].includes(tok.v)) return ')'
+      if (tok.v === 'lfloor' || tok.v === 'lceil') return tok.v
       return '.'
     }
     return tok.v
@@ -211,8 +250,17 @@ class Parser {
       this.delimiter()
     }
     if (open === '|') return `abs(${inner})`
+    if (open === 'lfloor') return `floor(${inner})`
+    if (open === 'lceil') return `ceil(${inner})`
     if (open === '.') return inner
     return `(${inner})`
+  }
+
+  /** ⌊x⌋ and ⌈x⌉ written without \left and \right. */
+  private bracketed(fn: string, close: string): string {
+    const inner = this.seq((t) => t.t === 'cmd' && t.v === close)
+    this.i++ // the closing bracket
+    return `${fn}(${inner})`
   }
 
   /** The argument of sin, lg…: (…) if it has one, otherwise the next number or symbol, as in "sin 30°". */
@@ -264,7 +312,11 @@ class Parser {
         power = this.arg()
       } else break
     }
-    const x = this.functionArgument()
+    if (power?.replace(/[\s()]/g, '') === '-1' && INVERSE[name]) {
+      name = INVERSE[name]
+      power = null
+    }
+    const x = unwrap(this.functionArgument())
     let call = base !== null && name === 'log' ? `log(${x},${base})` : `${name}(${x})`
     if (power !== null) call = `(${call})^(${power})`
     return `${out} ${call}`
@@ -316,12 +368,19 @@ class Parser {
     if (FRACTIONS.has(cmd)) {
       const num = this.arg()
       const den = this.arg()
-      const whole = out.match(TRAILING_INTEGER)
+      const whole = this.options.mixedNumbers ? out.match(TRAILING_INTEGER) : null
       if (whole && INTEGER.test(num.trim()) && INTEGER.test(den.trim())) {
         return `${out.slice(0, out.length - whole[1].length)}(${whole[1]}+${num.trim()}/${den.trim()})`
       }
       return `${out}((${num})/(${den}))`
     }
+    if (cmd === 'binom' || cmd === 'dbinom' || cmd === 'tbinom') {
+      const n = this.arg()
+      const k = this.arg()
+      return `${out} combinations(${n},${k})`
+    }
+    if (cmd === 'lfloor') return out + this.bracketed('floor', 'rfloor')
+    if (cmd === 'lceil') return out + this.bracketed('ceil', 'rceil')
     if (cmd === 'sqrt') {
       const n = this.optionalArg()
       const x = this.arg()
@@ -336,11 +395,11 @@ class Parser {
     if (cmd in FUNCTIONS) return this.func(FUNCTIONS[cmd], out)
     if (cmd in SYMBOLS) return out + SYMBOLS[cmd]
     if (IGNORED.has(cmd)) return out
-    throw new Error(`Не поддерживается: \\${cmd}`)
+    throw new CalcError(`Not supported: \\${cmd}`)
   }
 }
 
 /** Convert LaTeX from the textbook-style field into a mathjs expression. */
-export function latexToExpr(latex: string): string {
-  return new Parser(tokenize(latex)).parse().replace(/\s+/g, ' ').trim()
+export function latexToExpr(latex: string, options: LatexOptions = {}): string {
+  return new Parser(tokenize(latex), options).parse().replace(/\s+/g, ' ').trim()
 }

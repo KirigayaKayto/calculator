@@ -7,10 +7,10 @@ export type LineResult =
   | { kind: 'value'; text: string; plain: string }
   | { kind: 'error'; error: string }
 
-const SUM_NAMES = ['итого', 'сумма', 'всего', 'total', 'sum']
-const PREV_NAMES = ['пред', 'prev', 'ans']
+const SUM_NAMES = ['total', 'subtotal']
+const PREV_NAMES = ['prev']
 
-/** "Аренда: 30 000" — the text before the colon is a label. */
+/** "Rent: 30 000" — the text before the colon is a label. */
 const LABEL = /^\s*(\p{L}[^:=]*?):\s*(.*)$/u
 const ASSIGNMENT = /^\s*([\p{L}_$][\p{L}\d_$]*)\s*=(?!=)/u
 const OPERATOR = /[-+*/^=(,%!]/
@@ -33,7 +33,7 @@ function mentions(expr: string, name: string) {
 }
 
 /**
- * "5 яблок", "Аренда 30000": drop an unknown word if it is just text next to a number.
+ * "5 apples", "Rent 30000": drop an unknown word if it is just text next to a number.
  * A word next to an operator ("x + 1") is a real operand, so it stays and the error is shown.
  */
 function dropTextWord(expr: string, name: string): string | null {
@@ -65,7 +65,7 @@ export function evaluateNotebook(src: string, settings: CalcSettings): LineResul
     const label = expr.match(LABEL)
     if (label) expr = label[2].trim()
     if (!expr) {
-      // an empty line or a heading starts a new block for "итого"
+      // an empty line or a heading starts a new block for "total"
       if (!line.trim() || label) block = []
       return { kind: 'empty' }
     }
@@ -98,7 +98,7 @@ export function evaluateNotebook(src: string, settings: CalcSettings): LineResul
     const assigned = attempt.match(ASSIGNMENT)
     if (assigned) userNames.add(assigned[1])
     if (typeof result.value !== 'function') {
-      // a line that uses "итого" is itself a total and is not added to the next one
+      // a line that uses "total" is itself a total and is not added to the next one
       const usesTotal = SUM_NAMES.some((n) => !userNames.has(n) && mentions(attempt, n))
       if (!usesTotal) block.push(result.value)
       prev = result.value

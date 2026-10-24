@@ -31,65 +31,87 @@
 >
   <div class="sheet">
     <header>
-      <h2 id="settings-title">Настройки</h2>
-      <button class="icon-btn" aria-label="Закрыть" onclick={() => dialog?.close()}><Icon name="x" /></button>
+      <h2 id="settings-title">Settings</h2>
+      <button class="icon-btn" aria-label="Close" onclick={() => dialog?.close()}><Icon name="x" /></button>
     </header>
 
     <Segmented
-      label="Тема"
+      label="Theme"
       name="theme"
       bind:value={settings.theme}
       options={[
-        { value: 'system', label: 'Системная' },
-        { value: 'light', label: 'Светлая' },
-        { value: 'dark', label: 'Тёмная' },
+        { value: 'system', label: 'System' },
+        { value: 'light', label: 'Light' },
+        { value: 'dark', label: 'Dark' },
       ]}
     />
 
     <Segmented
-      label="Десятичный разделитель"
-      name="decimal"
-      bind:value={settings.decimal}
-      options={[
-        { value: ',', label: 'Запятая 1,5' },
-        { value: '.', label: 'Точка 1.5' },
-      ]}
-    />
-    <p class="hint">
-      {settings.decimal === ','
-        ? 'Аргументы функций разделяются точкой с запятой: max(3; 5)'
-        : 'Аргументы функций разделяются запятой: max(3, 5)'}
-    </p>
-
-    <Segmented
-      label="Углы"
+      label="Angles"
       name="angle"
       bind:value={settings.angle}
       options={[
-        { value: 'deg', label: 'Градусы' },
-        { value: 'rad', label: 'Радианы' },
+        { value: 'deg', label: 'Degrees' },
+        { value: 'rad', label: 'Radians' },
       ]}
     />
 
     <Segmented
-      label="Точность ответа"
-      name="digits"
-      bind:value={settings.digits}
+      label="Number format"
+      name="format"
+      bind:value={settings.format}
       options={[
-        { value: 10, label: '10 знаков' },
-        { value: 16, label: '16 знаков' },
-        { value: 32, label: '32 знака' },
+        { value: 'auto', label: 'Auto' },
+        { value: 'fix', label: 'Fix' },
+        { value: 'sci', label: 'Sci' },
+        { value: 'eng', label: 'Eng' },
+        { value: 'sig', label: 'Sig' },
+      ]}
+    />
+    <p class="hint">The chip next to the answer changes the format and the number of digits.</p>
+
+    <Segmented
+      label="Decimal mark"
+      name="decimal"
+      bind:value={settings.decimal}
+      options={[
+        { value: '.', label: 'Point 1.5' },
+        { value: ',', label: 'Comma 1,5' },
+      ]}
+    />
+    {#if settings.decimal === ','}
+      <p class="hint">Function arguments are then separated by semicolons: max(3; 5).</p>
+    {/if}
+
+    <Segmented
+      label="Mixed numbers"
+      name="mixed"
+      bind:value={settings.mixedNumbers}
+      options={[
+        { value: false, label: '2 · ½ = 1' },
+        { value: true, label: '2½ = 2.5' },
+      ]}
+    />
+    <p class="hint">Whether a whole number written before a fraction multiplies it or makes a mixed number.</p>
+
+    <Segmented
+      label="Function keys on a phone"
+      name="autoReturn"
+      bind:value={settings.autoReturn}
+      options={[
+        { value: true, label: 'Back to 123' },
+        { value: false, label: 'Stay open' },
       ]}
     />
 
     {#if canVibrate}
       <Segmented
-        label="Вибрация при нажатии"
+        label="Vibrate on key press"
         name="haptics"
         bind:value={settings.haptics}
         options={[
-          { value: true, label: 'Вкл' },
-          { value: false, label: 'Выкл' },
+          { value: true, label: 'On' },
+          { value: false, label: 'Off' },
         ]}
       />
     {/if}
@@ -97,18 +119,17 @@
     <div class="actions">
       {#if install.prompt}
         <button class="action primary" onclick={installApp}>
-          <Icon name="download" size={18} /> Установить на это устройство
+          <Icon name="download" size={18} /> Install on this device
         </button>
       {/if}
       <button class="action" onclick={clearHistory} disabled={!history.items.length}>
         <Icon name="trash" size={18} />
-        {historyCleared ? 'История очищена' : 'Очистить историю'}
+        {historyCleared ? 'History cleared' : 'Clear history'}
       </button>
     </div>
 
     <p class="about">
-      Без рекламы и слежки. Всё хранится только на этом устройстве. Работает без интернета — интернет нужен
-      только для курсов валют.
+      No ads, no tracking. Everything stays on this device. Works offline.
     </p>
   </div>
 </dialog>

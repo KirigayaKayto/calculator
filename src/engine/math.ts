@@ -1,8 +1,9 @@
 import { create, all, type BigNumber, type MathJsInstance } from 'mathjs'
+import { CalcError } from './errors'
 
 export type Angle = 'deg' | 'rad'
 
-// predictable: sqrt(-1), asin(2), log(-1) give NaN ("не определено") instead of complex numbers,
+// predictable: sqrt(-1), asin(2), log(-1) give NaN ("Undefined") instead of complex numbers,
 // which is what people expect from a calculator.
 export const math: MathJsInstance = create(all, {
   number: 'BigNumber',
@@ -10,117 +11,27 @@ export const math: MathJsInstance = create(all, {
   predictable: true,
 })
 
-// ---- Cyrillic and currency symbols in variable and unit names ----
+// ---- units mathjs does not have ----
 
-const CYRILLIC = /^[Ѐ-ӿ]$/
-const CURRENCY_SIGNS = /^[$€₽]$/
-
-const parser = math.parse as unknown as {
-  isAlpha: (c: string, cPrev: string, cNext: string) => boolean
-}
-const isAlphaOriginal = parser.isAlpha
-parser.isAlpha = (c, cPrev, cNext) =>
-  isAlphaOriginal(c, cPrev, cNext) || CYRILLIC.test(c) || CURRENCY_SIGNS.test(c)
-
-interface UnitStatic {
-  isValidAlpha: (c: string) => boolean
-  isValuelessUnit: (name: string) => boolean
-}
-export const UnitClass = (math as unknown as { Unit: UnitStatic }).Unit
-const isValidAlphaOriginal = UnitClass.isValidAlpha
-UnitClass.isValidAlpha = (c) => isValidAlphaOriginal(c) || CYRILLIC.test(c) || CURRENCY_SIGNS.test(c)
-
-const ownUnits = new Set<string>()
-
-/** Create a unit; with `override`, redefine only units created here, never the built-in ones. */
-export function defineUnit(name: string, definition: string | undefined, aliases: string[] = [], override = false) {
-  const isFree = (n: string) => !UnitClass.isValuelessUnit(n) || (override && ownUnits.has(n))
-  if (!isFree(name)) return
-  const free = aliases.filter(isFree)
-  math.createUnit(name, { definition, aliases: free }, { override })
-  for (const n of [name, ...free]) ownUnits.add(n)
-}
-
-// ---- Russian unit names ----
-
-const RU_UNITS: [string, string, string[]?][] = [
-  // длина
-  ['мкм', '1 um'],
-  ['мм', '1 mm'],
-  ['см', '1 cm'],
-  ['дм', '1 dm'],
-  ['м', '1 m', ['метр', 'метра', 'метров']],
-  ['км', '1 km'],
-  ['дюйм', '1 inch', ['дюйма', 'дюймов']],
-  ['фут', '1 ft', ['фута', 'футов']],
-  ['ярд', '1 yd', ['ярда', 'ярдов']],
-  ['миля', '1 mi', ['мили', 'миль']],
-  ['мормиля', '1852 m'],
-  // масса
-  ['мг', '1 mg'],
-  ['г', '1 g', ['грамм', 'грамма', 'граммов']],
-  ['кг', '1 kg'],
-  ['ц', '100 kg'],
-  ['т', '1000 kg', ['тонна', 'тонны', 'тонн']],
-  ['фунт', '1 lbm', ['фунта', 'фунтов']],
-  ['унция', '1 oz', ['унции', 'унций']],
-  ['карат', '0.2 g'],
-  // время
-  ['мс', '1 ms'],
-  ['с', '1 s', ['сек']],
-  ['мин', '1 min'],
-  ['ч', '1 h', ['час', 'часа', 'часов']],
-  ['сут', '1 day', ['день', 'дня', 'дней', 'дн']],
-  ['нед', '1 week', ['неделя', 'недели', 'недель']],
-  ['мес', '1 month', ['месяц', 'месяца', 'месяцев']],
-  ['год', '1 year', ['года', 'лет']],
-  // площадь
-  ['ар', '100 m^2', ['сотка', 'сотки', 'соток']],
-  ['га', '10000 m^2'],
-  ['акр', '1 acre'],
-  // объём
-  ['мл', '1 ml'],
-  ['л', '1 l', ['литр', 'литра', 'литров']],
-  ['галлон', '1 gal'],
-  // скорость
-  ['узел', '1852 m/h', ['узла', 'узлов']],
-  // данные: как в Проводнике Windows, 1 КБ = 1024 Б
-  ['бит', '1 b'],
-  ['Б', '1 B', ['байт']],
-  ['КБ', '1024 B'],
-  ['МБ', '1048576 B'],
-  ['ГБ', '1073741824 B'],
-  ['ТБ', '1099511627776 B'],
-  // энергия и мощность
-  ['Дж', '1 J'],
-  ['кДж', '1 kJ'],
-  ['кал', '4.184 J'],
-  ['ккал', '4184 J'],
-  ['Вт', '1 W'],
-  ['кВт', '1 kW'],
-  ['МВт', '1 MW'],
-  ['лс', '735.49875 W'],
-  // давление
-  ['Па', '1 Pa'],
-  ['кПа', '1 kPa'],
-  ['МПа', '1 MPa'],
-  ['бар', '1 bar'],
-  ['атм', '1 atm'],
-  ['ммртст', '1 mmHg'],
-  // углы
-  ['градус', '1 deg', ['градуса', 'градусов', 'град']],
-  ['рад', '1 rad'],
+const EXTRA_UNITS: [string, string, string[]?][] = [
+  ['cal', '4.184 J', ['calorie', 'calories']],
+  ['kcal', '4184 J', ['kilocalorie', 'kilocalories']],
+  ['knot', '1852 m/h', ['knots', 'kn']],
+  ['nmi', '1852 m', ['nauticalmile']],
+  ['ly', '9460730472580800 m', ['lightyear', 'lightyears']],
+  ['au', '149597870700 m'],
+  ['pc', '30856775814913673 m', ['parsec', 'parsecs']],
+  ['rpm', '1/min'],
 ]
 
-for (const [name, definition, aliases] of RU_UNITS) {
-  try {
-    defineUnit(name, definition, aliases)
-  } catch (e) {
-    console.warn(`unit ${name}:`, e)
-  }
+const isUnit = (math as unknown as { Unit: { isValuelessUnit: (name: string) => boolean } }).Unit.isValuelessUnit
+
+for (const [name, definition, aliases = []] of EXTRA_UNITS) {
+  if (isUnit(name)) continue
+  math.createUnit(name, { definition, aliases: aliases.filter((a) => !isUnit(a)) })
 }
 
-// ---- functions that behave like a regular calculator ----
+// ---- functions that behave like a calculator ----
 
 const PI = math.pi as unknown as BigNumber
 
@@ -144,7 +55,7 @@ function fromRadians(x: unknown, angle: Angle): unknown {
 }
 
 function undefinedResult(): never {
-  throw new Error('Не определено')
+  throw new CalcError('Undefined')
 }
 
 /** Functions placed in the evaluation scope; mathjs resolves scope before its built-ins. */
@@ -163,20 +74,23 @@ export function calculatorFunctions(angle: Angle): Map<string, unknown> {
     if (isBig(t) && t.isZero()) undefinedResult()
     return math.divide(1, t as BigNumber)
   }
+  const sec = (x: unknown) => math.divide(1, cos(x) as BigNumber)
+  const csc = (x: unknown) => math.divide(1, sin(x) as BigNumber)
+  const asin = (x: unknown) => fromRadians(math.asin(x as BigNumber), angle)
+  const acos = (x: unknown) => fromRadians(math.acos(x as BigNumber), angle)
+  const atan = (x: unknown) => fromRadians(math.atan(x as BigNumber), angle)
   const log10 = (x: unknown) => math.log10(x as BigNumber)
   const fns: Record<string, unknown> = {
     sin,
     cos,
     tan,
-    tg: tan,
     cot,
-    ctg: cot,
-    asin: (x: unknown) => fromRadians(math.asin(x as BigNumber), angle),
-    acos: (x: unknown) => fromRadians(math.acos(x as BigNumber), angle),
-    atan: (x: unknown) => fromRadians(math.atan(x as BigNumber), angle),
-    arcsin: (x: unknown) => fromRadians(math.asin(x as BigNumber), angle),
-    arccos: (x: unknown) => fromRadians(math.acos(x as BigNumber), angle),
-    arctg: (x: unknown) => fromRadians(math.atan(x as BigNumber), angle),
+    sec,
+    csc,
+    asin,
+    acos,
+    atan,
+    acot: (x: unknown) => fromRadians(math.acot(x as BigNumber), angle),
     // as on any calculator: log is base 10, ln is natural
     log: (x: unknown, base?: unknown) =>
       base === undefined ? log10(x) : math.log(x as BigNumber, base as BigNumber),

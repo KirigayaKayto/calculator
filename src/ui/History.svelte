@@ -26,7 +26,7 @@
     tick().then(scrollToNewest)
   })
 
-  // the list shrinks when the function keys open: keep the newest entries in view
+  // the list can shrink when the layout changes: keep the newest entries in view
   $effect(() => {
     if (!list) return
     const observer = new ResizeObserver(scrollToNewest)
@@ -46,14 +46,14 @@
   }
 </script>
 
-<section class="history" class:compact aria-label="История вычислений">
+<section class="history" class:compact aria-label="History">
   {#if !compact}
     <header>
-      <h2>История</h2>
+      <h2>History</h2>
       {#if history.items.length}
         <button class="clear" class:confirming onclick={clear}>
           <Icon name="trash" size={18} />
-          {confirming ? 'Точно очистить?' : 'Очистить'}
+          {confirming ? 'Clear all?' : 'Clear'}
         </button>
       {/if}
     </header>
@@ -64,16 +64,16 @@
       <li class="clear-row">
         <button class="clear" class:confirming onclick={clear}>
           <Icon name="trash" size={16} />
-          {confirming ? 'Точно очистить историю?' : 'Очистить историю'}
+          {confirming ? 'Clear the whole history?' : 'Clear history'}
         </button>
       </li>
     {/if}
     {#each history.items as item (item.at)}
       <li>
-        <button class="expr" title="Вставить пример" onclick={() => onpick(item, 'expr')}>
+        <button class="expr" title="Insert this expression" onclick={() => onpick(item, 'expr')}>
           {#if item.latex}{@html latexMarkup(item.latex)}{:else}{item.expr}{/if}
         </button>
-        <button class="result" title="Вставить ответ" onclick={() => onpick(item, 'result')}>
+        <button class="result" title="Insert this answer" onclick={() => onpick(item, 'result')}>
           {@html latexMarkup(
             '=' + (item.showFraction && item.fraction ? item.fraction : numberLatex(item.plain, settings.decimal, true)),
           )}
@@ -83,7 +83,7 @@
   </ol>
 
   {#if !compact && !history.items.length}
-    <p class="empty">Здесь появятся ваши вычисления. Нажмите на пример или ответ, чтобы вставить его.</p>
+    <p class="empty">Your calculations will appear here. Tap an expression or an answer to insert it.</p>
   {/if}
 </section>
 

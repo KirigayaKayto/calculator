@@ -1,12 +1,17 @@
 import { math, Scope, calculatorFunctions, type Angle } from './math'
 import { normalize, closeParens, type DecimalMark } from './input'
-import { formatValue } from './format'
-import { latexToExpr, IncompleteError } from './latex'
+import { formatValue, type FormatMode } from './format'
+import { latexToExpr } from './latex'
+import { CalcError, IncompleteError } from './errors'
 
 export interface CalcSettings {
   angle: Angle
   decimal: DecimalMark
+  /** Digits for the number format: significant digits, or decimal places in `fix` mode. */
   digits: number
+  format?: FormatMode
+  /** 2½ means 2 + ½ (school); otherwise a number before a fraction multiplies it (university). */
+  mixedNumbers?: boolean
 }
 
 export type CalcResult =
@@ -29,27 +34,28 @@ export function newScope(angle: Angle): Scope {
 }
 
 const ERRORS: [RegExp, (m: RegExpMatchArray) => string][] = [
-  [/^Undefined (?:symbol|function) (.+)$/, (m) => `Неизвестно: ${m[1]}`],
-  [/^Unexpected end of expression/, () => 'Выражение не закончено'],
-  [/^Units do not match|^Cannot convert|do not match/, () => 'Несовместимые единицы'],
-  [/^Parenthesis \) expected/, () => 'Не хватает скобки'],
-  [/^Value expected/, () => 'Пропущено число'],
-  [/^Unexpected operator|^Syntax error|^Unexpected type of argument|^Invalid/, () => 'Ошибка в выражении'],
-  [/^Too many arguments|^Too few arguments/, () => 'Неверное число аргументов'],
+  [/^Undefined symbol (.+)$/, (m) => `Undefined variable: ${m[1]}`],
+  [/^Undefined function (.+)$/, (m) => `Undefined function: ${m[1]}`],
+  [/^Unexpected end of expression/, () => 'Incomplete expression'],
+  [/^Units do not match|^Cannot convert|do not match/, () => 'Units do not match'],
+  [/^Parenthesis \) expected/, () => 'Missing parenthesis'],
+  [/^Value expected/, () => 'Missing number'],
+  [/^Too many arguments|^Too few arguments/, () => 'Wrong number of arguments'],
+  [/^Dimension mismatch/, () => 'Sizes do not match'],
 ]
 
 export function translateError(e: unknown): string {
+  if (e instanceof CalcError) return e.message
   const message = e instanceof Error ? e.message : String(e)
   for (const [re, make] of ERRORS) {
     const m = message.match(re)
     if (m) return make(m)
   }
-  // our own errors are already in Russian
-  return /^[А-ЯЁ]/.test(message) ? message : 'Ошибка в выражении'
+  return 'Syntax error'
 }
 
 export function format(value: unknown, settings: CalcSettings, plain = false): string {
-  return formatValue(value, { decimal: settings.decimal, digits: settings.digits, plain })
+  return formatValue(value, { decimal: settings.decimal, digits: settings.digits, mode: settings.format, plain })
 }
 
 /** Evaluate one already-normalized expression and format the result. */
@@ -65,7 +71,7 @@ export function evaluateNormalized(expr: string, settings: CalcSettings, scope: 
   }
 }
 
-/** Evaluate a line of text: the notebook and the converter fields. */
+/** Evaluate a line of text: the notes and the converter fields. */
 export function calculate(input: string, settings: CalcSettings, scope = newScope(settings.angle)): CalcResult {
   const expr = closeParens(normalize(input, { decimal: settings.decimal }))
   return evaluateNormalized(expr, settings, scope)
@@ -83,7 +89,7 @@ export function calculateLatex(
 ): CalcResult {
   let expr: string
   try {
-    expr = prefix + latexToExpr(latex)
+    expr = prefix + latexToExpr(latex, { mixedNumbers: settings.mixedNumbers })
   } catch (e) {
     return { ok: false, error: translateError(e), incomplete: e instanceof IncompleteError }
   }

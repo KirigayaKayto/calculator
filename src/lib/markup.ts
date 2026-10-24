@@ -15,7 +15,7 @@ export function latexMarkup(latex: string): string {
 }
 
 /**
- * A plain answer ("-1234.5", "1,8e19", "5000 м") as LaTeX. `grouped` sets thousands apart
+ * A plain answer ("-1234.5", "1.8e19", "5000 m") as LaTeX. `grouped` sets thousands apart
  * for display; the formula field gets them without, so the cursor does not stop inside numbers.
  */
 export function numberLatex(plain: string, decimal: DecimalMark, grouped = false): string {

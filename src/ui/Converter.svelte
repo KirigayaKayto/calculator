@@ -12,96 +12,117 @@
 
   const u = (unit: string, label: string): UnitDef => ({ u: unit, label })
 
+  // unit names are the ones the engine understands (mathjs plus the extras in math.ts)
   export const CATEGORIES: Category[] = [
     {
       id: 'length',
-      label: 'Длина',
-      pair: ['км', 'миля'],
+      label: 'Length',
+      pair: ['km', 'mi'],
       units: [
-        u('мм', 'Миллиметр'), u('см', 'Сантиметр'), u('м', 'Метр'), u('км', 'Километр'),
-        u('дюйм', 'Дюйм'), u('фут', 'Фут'), u('ярд', 'Ярд'), u('миля', 'Миля'), u('мормиля', 'Морская миля'),
+        u('nm', 'Nanometre'), u('um', 'Micrometre'), u('mm', 'Millimetre'), u('cm', 'Centimetre'),
+        u('m', 'Metre'), u('km', 'Kilometre'), u('inch', 'Inch'), u('ft', 'Foot'), u('yd', 'Yard'),
+        u('mi', 'Mile'), u('nmi', 'Nautical mile'), u('angstrom', 'Ångström'), u('au', 'Astronomical unit'),
+        u('ly', 'Light-year'), u('pc', 'Parsec'),
       ],
     },
     {
       id: 'mass',
-      label: 'Масса',
-      pair: ['кг', 'фунт'],
+      label: 'Mass',
+      pair: ['kg', 'lbm'],
       units: [
-        u('мг', 'Миллиграмм'), u('г', 'Грамм'), u('кг', 'Килограмм'), u('ц', 'Центнер'), u('т', 'Тонна'),
-        u('унция', 'Унция'), u('фунт', 'Фунт'), u('карат', 'Карат'),
+        u('mg', 'Milligram'), u('g', 'Gram'), u('kg', 'Kilogram'), u('tonne', 'Tonne'), u('oz', 'Ounce'),
+        u('lbm', 'Pound'), u('u', 'Atomic mass unit'),
+      ],
+    },
+    {
+      id: 'time',
+      label: 'Time',
+      pair: ['h', 'min'],
+      units: [
+        u('ns', 'Nanosecond'), u('us', 'Microsecond'), u('ms', 'Millisecond'), u('s', 'Second'),
+        u('min', 'Minute'), u('h', 'Hour'), u('day', 'Day'), u('week', 'Week'), u('year', 'Year'),
       ],
     },
     {
       id: 'temperature',
-      label: 'Температура',
+      label: 'Temperature',
       pair: ['degC', 'degF'],
-      units: [u('degC', 'Цельсий, °C'), u('degF', 'Фаренгейт, °F'), u('K', 'Кельвин, K')],
+      units: [u('degC', 'Celsius, °C'), u('degF', 'Fahrenheit, °F'), u('K', 'Kelvin, K')],
+    },
+    {
+      id: 'speed',
+      label: 'Speed',
+      pair: ['km/h', 'm/s'],
+      units: [u('m/s', 'Metre per second'), u('km/h', 'Kilometre per hour'), u('mi/h', 'Mile per hour'), u('knot', 'Knot')],
+    },
+    {
+      id: 'force',
+      label: 'Force',
+      pair: ['N', 'lbf'],
+      units: [u('N', 'Newton'), u('kN', 'Kilonewton'), u('dyn', 'Dyne'), u('lbf', 'Pound-force')],
+    },
+    {
+      id: 'energy',
+      label: 'Energy',
+      pair: ['kcal', 'kJ'],
+      units: [
+        u('J', 'Joule'), u('kJ', 'Kilojoule'), u('MJ', 'Megajoule'), u('cal', 'Calorie'), u('kcal', 'Kilocalorie'),
+        u('Wh', 'Watt-hour'), u('kWh', 'Kilowatt-hour'), u('eV', 'Electronvolt'), u('erg', 'Erg'), u('BTU', 'BTU'),
+      ],
+    },
+    {
+      id: 'power',
+      label: 'Power',
+      pair: ['hp', 'kW'],
+      units: [u('W', 'Watt'), u('kW', 'Kilowatt'), u('MW', 'Megawatt'), u('hp', 'Horsepower')],
+    },
+    {
+      id: 'pressure',
+      label: 'Pressure',
+      pair: ['atm', 'kPa'],
+      units: [
+        u('Pa', 'Pascal'), u('kPa', 'Kilopascal'), u('MPa', 'Megapascal'), u('bar', 'Bar'), u('atm', 'Atmosphere'),
+        u('mmHg', 'Millimetre of mercury'), u('torr', 'Torr'), u('psi', 'Pound per square inch'),
+      ],
     },
     {
       id: 'area',
-      label: 'Площадь',
-      pair: ['ар', 'м^2'],
+      label: 'Area',
+      pair: ['hectare', 'acre'],
       units: [
-        u('см^2', 'Кв. сантиметр'), u('м^2', 'Кв. метр'), u('ар', 'Сотка (ар)'), u('га', 'Гектар'),
-        u('км^2', 'Кв. километр'), u('ft^2', 'Кв. фут'), u('акр', 'Акр'),
+        u('mm^2', 'Square millimetre'), u('cm^2', 'Square centimetre'), u('m^2', 'Square metre'),
+        u('km^2', 'Square kilometre'), u('hectare', 'Hectare'), u('acre', 'Acre'), u('ft^2', 'Square foot'),
       ],
     },
     {
       id: 'volume',
-      label: 'Объём',
-      pair: ['л', 'галлон'],
+      label: 'Volume',
+      pair: ['L', 'gallon'],
       units: [
-        u('мл', 'Миллилитр'), u('л', 'Литр'), u('м^3', 'Куб. метр'), u('floz', 'Жидкая унция (США)'),
-        u('галлон', 'Галлон (США)'),
+        u('mL', 'Millilitre'), u('L', 'Litre'), u('cm^3', 'Cubic centimetre'), u('m^3', 'Cubic metre'),
+        u('floz', 'Fluid ounce (US)'), u('gallon', 'Gallon (US)'),
       ],
-    },
-    {
-      id: 'speed',
-      label: 'Скорость',
-      pair: ['км/ч', 'м/с'],
-      units: [u('км/ч', 'Километр в час'), u('м/с', 'Метр в секунду'), u('mi/h', 'Миля в час'), u('узел', 'Узел')],
-    },
-    {
-      id: 'time',
-      label: 'Время',
-      pair: ['ч', 'мин'],
-      units: [
-        u('мс', 'Миллисекунда'), u('с', 'Секунда'), u('мин', 'Минута'), u('ч', 'Час'), u('сут', 'Сутки'),
-        u('нед', 'Неделя'), u('мес', 'Месяц'), u('год', 'Год'),
-      ],
-    },
-    {
-      id: 'data',
-      label: 'Данные',
-      pair: ['ГБ', 'МБ'],
-      units: [u('бит', 'Бит'), u('Б', 'Байт'), u('КБ', 'Килобайт'), u('МБ', 'Мегабайт'), u('ГБ', 'Гигабайт'), u('ТБ', 'Терабайт')],
-    },
-    {
-      id: 'pressure',
-      label: 'Давление',
-      pair: ['атм', 'кПа'],
-      units: [
-        u('Па', 'Паскаль'), u('кПа', 'Килопаскаль'), u('МПа', 'Мегапаскаль'), u('бар', 'Бар'),
-        u('атм', 'Атмосфера'), u('ммртст', 'Мм рт. ст.'), u('psi', 'Фунт на кв. дюйм'),
-      ],
-    },
-    {
-      id: 'energy',
-      label: 'Энергия',
-      pair: ['ккал', 'кДж'],
-      units: [u('Дж', 'Джоуль'), u('кДж', 'Килоджоуль'), u('кал', 'Калория'), u('ккал', 'Килокалория'), u('kWh', 'Киловатт-час')],
-    },
-    {
-      id: 'power',
-      label: 'Мощность',
-      pair: ['лс', 'кВт'],
-      units: [u('Вт', 'Ватт'), u('кВт', 'Киловатт'), u('МВт', 'Мегаватт'), u('лс', 'Лошадиная сила')],
     },
     {
       id: 'angle',
-      label: 'Углы',
-      pair: ['градус', 'рад'],
-      units: [u('градус', 'Градус'), u('рад', 'Радиан'), u('grad', 'Град (гон)')],
+      label: 'Angle',
+      pair: ['deg', 'rad'],
+      units: [u('deg', 'Degree'), u('rad', 'Radian'), u('grad', 'Gradian'), u('arcmin', 'Arcminute'), u('arcsec', 'Arcsecond')],
+    },
+    {
+      id: 'frequency',
+      label: 'Frequency',
+      pair: ['rpm', 'Hz'],
+      units: [u('Hz', 'Hertz'), u('kHz', 'Kilohertz'), u('MHz', 'Megahertz'), u('GHz', 'Gigahertz'), u('rpm', 'Revolutions per minute')],
+    },
+    {
+      id: 'data',
+      label: 'Data',
+      pair: ['GB', 'GiB'],
+      units: [
+        u('b', 'Bit'), u('B', 'Byte'), u('kB', 'Kilobyte'), u('MB', 'Megabyte'), u('GB', 'Gigabyte'), u('TB', 'Terabyte'),
+        u('KiB', 'Kibibyte'), u('MiB', 'Mebibyte'), u('GiB', 'Gibibyte'),
+      ],
     },
   ]
 </script>
@@ -110,37 +131,27 @@
   import { math } from '../engine/math'
   import { calculate, format, translateError } from '../engine/calc'
   import { formatUnitName } from '../engine/format'
-  import { CURRENCIES } from '../engine/currency'
-  import { settings, converter, currency, refreshRates } from '../lib/state.svelte'
+  import { settings, calcSettings, converter } from '../lib/state.svelte'
   import Icon from './Icon.svelte'
 
-  const currencyCategory: Category = {
-    id: 'currency',
-    label: 'Валюты',
-    pair: ['USD', 'RUB'],
-    units: CURRENCIES.map((c) => u(c.code, `${c.name}, ${c.code}`)),
-  }
-
-  const categories = [currencyCategory, ...CATEGORIES]
-
-  const category = $derived(categories.find((c) => c.id === converter.category) ?? categories[1])
+  const category = $derived(CATEGORIES.find((c) => c.id === converter.category) ?? CATEGORIES[0])
   const pair = $derived(converter.pairs[category.id] ?? category.pair)
-  const isCurrency = $derived(category.id === 'currency')
 
   type Conversion = { ok: true; text: string } | { ok: false; error: string }
 
   function convert(amount: string, from: string, to: string): Conversion {
-    currency.version
     if (!amount.trim()) return { ok: false, error: '' }
-    const r = calculate(amount, settings)
+    // the fields take expressions too: 2*3.5, 1/3
+    const cs = calcSettings(settings)
+    const r = calculate(amount, cs)
     if (!r.ok) return { ok: false, error: r.error }
-    if (!math.isBigNumber(r.value)) return { ok: false, error: 'Введите число' }
+    if (!math.isBigNumber(r.value)) return { ok: false, error: 'Enter a number' }
     try {
       const value = math.unit(r.value, from).toNumeric(to)
-      // ten significant digits are plenty for a conversion: 0,6213711922 миль, not 0,621371192237334
-      return { ok: true, text: format(value, { ...settings, digits: Math.min(settings.digits, 10) }) }
+      // ten significant digits are plenty for a conversion unless a format is chosen
+      const digits = settings.format === 'auto' ? Math.min(cs.digits, 10) : cs.digits
+      return { ok: true, text: format(value, { ...cs, digits }) }
     } catch (e) {
-      if (isCurrency && !currency.rates) return { ok: false, error: 'Курсы ещё не загружены' }
       return { ok: false, error: translateError(e) }
     }
   }
@@ -167,27 +178,20 @@
     converter.amount = value
   }
 
-  function selectCategory(id: string) {
-    converter.category = id
-    if (id === 'currency') refreshRates()
-  }
-
   const unitLabel = (code: string) => category.units.find((x) => x.u === code)?.label ?? code
-
-  const dateFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
 </script>
 
 <div class="converter">
-  <div class="categories" role="tablist" aria-label="Что переводить">
-    {#each categories as c (c.id)}
-      <button role="tab" aria-selected={c.id === category.id} onclick={() => selectCategory(c.id)}>{c.label}</button>
+  <div class="categories" role="tablist" aria-label="Quantity">
+    {#each CATEGORIES as c (c.id)}
+      <button role="tab" aria-selected={c.id === category.id} onclick={() => (converter.category = c.id)}>{c.label}</button>
     {/each}
   </div>
 
   <div class="card">
     {#snippet field(side: 'a' | 'b', value: string, unit: string, index: 0 | 1)}
       <div class="field" class:source={converter.side === side}>
-        <label class="visually-hidden" for="amount-{side}">Значение, {unitLabel(unit)}</label>
+        <label class="visually-hidden" for="amount-{side}">Value in {unitLabel(unit)}</label>
         <input
           id="amount-{side}"
           class="amount num"
@@ -198,7 +202,7 @@
           oninput={(e) => edit(side, e.currentTarget.value)}
           onfocus={(e) => e.currentTarget.select()}
         />
-        <label class="visually-hidden" for="unit-{side}">Единица</label>
+        <label class="visually-hidden" for="unit-{side}">Unit</label>
         <select
           id="unit-{side}"
           value={unit}
@@ -209,7 +213,7 @@
           }}
         >
           {#each category.units as x (x.u)}
-            <option value={x.u}>{x.label}</option>
+            <option value={x.u}>{x.label} ({formatUnitName(x.u)})</option>
           {/each}
         </select>
       </div>
@@ -219,7 +223,7 @@
 
     <div class="middle">
       <span class="line" aria-hidden="true"></span>
-      <button class="icon-btn swap" aria-label="Поменять местами" onclick={swap}><Icon name="swap" /></button>
+      <button class="icon-btn swap" aria-label="Swap units" onclick={swap}><Icon name="swap" /></button>
       <span class="line" aria-hidden="true"></span>
     </div>
 
@@ -233,25 +237,6 @@
       {/if}
     </p>
   </div>
-
-  {#if isCurrency}
-    <div class="rates">
-      <span>
-        {#if currency.loading}
-          Загружаю курсы…
-        {:else if currency.error}
-          <span class="error">{currency.error}</span>
-        {:else if currency.rates}
-          Курсы на {dateFormat.format(currency.rates.updated)}
-        {:else}
-          Курсов пока нет — нужен интернет
-        {/if}
-      </span>
-      <button class="refresh" onclick={() => refreshRates(true)} disabled={currency.loading}>
-        <Icon name="refresh" size={18} /> Обновить
-      </button>
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -358,27 +343,5 @@
 
   .error {
     color: var(--error);
-  }
-
-  .rates {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 0 4px;
-    color: var(--muted);
-    font-size: 15px;
-  }
-
-  .refresh {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 44px;
-    padding: 0 14px;
-    border-radius: 12px;
-    background: var(--key-fn);
-    color: var(--text);
-    flex: none;
   }
 </style>

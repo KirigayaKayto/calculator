@@ -1,16 +1,15 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import Calculator from './ui/Calculator.svelte'
   import Notebook from './ui/Notebook.svelte'
   import Converter from './ui/Converter.svelte'
   import Settings from './ui/Settings.svelte'
   import Icon from './ui/Icon.svelte'
-  import { ui, settings, prefersDark, toast, refreshRates, type Tab } from './lib/state.svelte'
+  import { ui, settings, prefersDark, toast, type Tab } from './lib/state.svelte'
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: 'calc', label: 'Калькулятор' },
-    { id: 'notes', label: 'Блокнот' },
-    { id: 'convert', label: 'Конвертер' },
+    { id: 'calc', label: 'Calculator' },
+    { id: 'notes', label: 'Notes' },
+    { id: 'units', label: 'Units' },
   ]
 
   let settingsOpen = $state(false)
@@ -25,10 +24,6 @@
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#141413' : '#eeece7')
   })
 
-  onMount(() => {
-    refreshRates()
-  })
-
   function onTabKeydown(e: KeyboardEvent, i: number) {
     const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
     if (!step) return
@@ -41,7 +36,7 @@
 
 <div class="app">
   <header class="topbar">
-    <div class="tabs" role="tablist" aria-label="Режим">
+    <div class="tabs" role="tablist" aria-label="Mode">
       {#each TABS as tab, i (tab.id)}
         <button
           id="tab-{tab.id}"
@@ -56,7 +51,7 @@
         </button>
       {/each}
     </div>
-    <button class="icon-btn" aria-label="Настройки" onclick={() => (settingsOpen = true)}>
+    <button class="icon-btn" aria-label="Settings" onclick={() => (settingsOpen = true)}>
       <Icon name="settings" />
     </button>
   </header>

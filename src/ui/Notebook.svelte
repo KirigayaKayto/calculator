@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { evaluateNotebook } from '../engine/notebook'
-  import { settings, notebook, currency, newSheet, copy } from '../lib/state.svelte'
+  import { settings, calcSettings, notebook, newSheet, copy } from '../lib/state.svelte'
   import Icon from './Icon.svelte'
 
   let editor = $state<HTMLTextAreaElement>()
@@ -12,10 +12,7 @@
 
   const sheet = $derived(notebook.sheets.find((s) => s.id === notebook.current) ?? notebook.sheets[0])
 
-  const results = $derived.by(() => {
-    currency.version
-    return evaluateNotebook(sheet.text, settings)
-  })
+  const results = $derived(evaluateNotebook(sheet.text, calcSettings(settings)))
 
   function select(id: string) {
     notebook.current = id
@@ -24,7 +21,7 @@
   }
 
   async function add() {
-    const s = newSheet(`Лист ${notebook.sheets.length + 1}`)
+    const s = newSheet(`Sheet ${notebook.sheets.length + 1}`)
     notebook.sheets.push(s)
     select(s.id)
     await tick()
@@ -42,7 +39,7 @@
     const i = notebook.sheets.findIndex((s) => s.id === sheet.id)
     if (notebook.sheets.length === 1) {
       sheet.text = ''
-      sheet.title = 'Лист 1'
+      sheet.title = 'Sheet 1'
       return
     }
     notebook.sheets.splice(i, 1)
@@ -51,42 +48,42 @@
 </script>
 
 <div class="notebook">
-  <div class="sheets" role="tablist" aria-label="Листы">
+  <div class="sheets" role="tablist" aria-label="Sheets">
     {#each notebook.sheets as s (s.id)}
-      <button role="tab" aria-selected={s.id === sheet.id} onclick={() => select(s.id)}>{s.title || 'Без названия'}</button>
+      <button role="tab" aria-selected={s.id === sheet.id} onclick={() => select(s.id)}>{s.title || 'Untitled'}</button>
     {/each}
-    <button class="add" aria-label="Новый лист" onclick={add}><Icon name="plus" size={20} /></button>
+    <button class="add" aria-label="New sheet" onclick={add}><Icon name="plus" size={20} /></button>
   </div>
 
   <div class="toolbar">
-    <label class="visually-hidden" for="sheet-title">Название листа</label>
-    <input id="sheet-title" class="title" bind:value={sheet.title} placeholder="Без названия" autocomplete="off" />
-    <button class="icon-btn" aria-label="Подсказка" aria-expanded={help} onclick={() => (help = !help)}>
+    <label class="visually-hidden" for="sheet-title">Sheet title</label>
+    <input id="sheet-title" class="title" bind:value={sheet.title} placeholder="Untitled" autocomplete="off" />
+    <button class="icon-btn" aria-label="Help" aria-expanded={help} onclick={() => (help = !help)}>
       <Icon name="help" />
     </button>
-    <button class="icon-btn delete" class:confirming={confirmDelete} onclick={remove} aria-label="Удалить лист">
+    <button class="icon-btn delete" class:confirming={confirmDelete} onclick={remove} aria-label="Delete sheet">
       <Icon name="trash" />
-      {#if confirmDelete}<span>Удалить?</span>{/if}
+      {#if confirmDelete}<span>Delete?</span>{/if}
     </button>
   </div>
 
   {#if help}
     <div class="help">
-      <p>Пишите по одному расчёту в строке — ответ появится справа. Нажмите на ответ, чтобы скопировать.</p>
+      <p>One calculation per line; the answer appears on the right. Tap an answer to copy it.</p>
       <dl>
-        <dt>аренда = 30 000</dt><dd>переменная</dd>
-        <dt>Еда: 12 500</dt><dd>подпись перед двоеточием</dd>
-        <dt>итого, сумма</dt><dd>сумма строк выше до пустой строки</dd>
-        <dt>пред</dt><dd>результат предыдущей строки</dd>
-        <dt># заметка</dt><dd>комментарий</dd>
-        <dt>5 км в м, 100 $ в руб</dt><dd>единицы и валюты</dd>
-        <dt>sin(30), √2, 2^10, 15%</dt><dd>функции, как в калькуляторе</dd>
+        <dt>rent = 1 200</dt><dd>a variable</dd>
+        <dt>Food: 450</dt><dd>a label before the colon</dd>
+        <dt>total</dt><dd>sum of the lines above, up to an empty line</dd>
+        <dt>prev</dt><dd>the answer of the previous line</dd>
+        <dt># note</dt><dd>a comment</dd>
+        <dt>5 km to m, 9.81 m/s^2 * 2 s</dt><dd>units</dd>
+        <dt>sin(30), sqrt(2), 2^10, 15%</dt><dd>functions, as in the calculator</dd>
       </dl>
     </div>
   {/if}
 
   <div class="sheet">
-    <label class="visually-hidden" for="sheet-text">Текст листа</label>
+    <label class="visually-hidden" for="sheet-text">Sheet text</label>
     <textarea
       id="sheet-text"
       class="num"
@@ -98,14 +95,14 @@
       spellcheck="false"
       autocapitalize="off"
       autocomplete="off"
-      placeholder={'цена = 250\nцена * 4\nСкидка: цена * 4 * 10%'}
+      placeholder={'price = 250\nprice * 4\nDiscount: price * 4 * 10%'}
     ></textarea>
-    <div class="results" aria-label="Результаты">
+    <div class="results" aria-label="Answers">
       <div class="rows" style:transform="translateY({-scrollTop}px)">
         {#each results as r, i (i)}
           <div class="row">
             {#if r.kind === 'value'}
-              <button class="value num" title="Скопировать" onclick={() => copy(r.plain)}>{r.text}</button>
+              <button class="value num" title="Copy" onclick={() => copy(r.plain)}>{r.text}</button>
             {:else if r.kind === 'error'}
               <span class="err" title={r.error}>{r.error}</span>
             {/if}

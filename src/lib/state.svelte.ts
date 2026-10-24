@@ -1,26 +1,65 @@
 import { MediaQuery } from 'svelte/reactivity'
 import { load, save } from './storage'
 import type { CalcSettings } from '../engine/calc'
-import { applyRates, fetchRates, type Rates } from '../engine/currency'
+import type { Angle } from '../engine/math'
+import type { DecimalMark } from '../engine/input'
+import type { FormatMode } from '../engine/format'
 
 export type Theme = 'system' | 'light' | 'dark'
-export type Tab = 'calc' | 'notes' | 'convert'
+export type Tab = 'calc' | 'notes' | 'units'
 
-export interface Settings extends CalcSettings {
+export interface Settings {
   theme: Theme
+  angle: Angle
+  decimal: DecimalMark
+  /** How answers are written, and the digits for each mode (decimal places for fix). */
+  format: FormatMode
+  formatDigits: Record<FormatMode, number>
+  /** 2½ means 2 + ½ in input and answers; off by default, as at university. */
+  mixedNumbers: boolean
+  /** After a key on a function page, go back to the 123 page (phones). */
+  autoReturn: boolean
   haptics: boolean
 }
 
-const DEFAULT_SETTINGS: Settings = { theme: 'system', angle: 'deg', decimal: ',', digits: 16, haptics: true }
+export const DEFAULT_DIGITS: Record<FormatMode, number> = { auto: 12, fix: 2, sci: 4, eng: 4, sig: 3 }
 
-export const settings = $state<Settings>({ ...DEFAULT_SETTINGS, ...load<Partial<Settings>>('settings', {}) })
+const DEFAULT_SETTINGS: Settings = {
+  theme: 'system',
+  angle: 'deg',
+  decimal: '.',
+  format: 'auto',
+  formatDigits: DEFAULT_DIGITS,
+  mixedNumbers: false,
+  autoReturn: true,
+  haptics: true,
+}
 
-/** `latex` is the content of the textbook-style calculator field. */
-export const ui = $state<{ tab: Tab; latex: string; sciOpen: boolean }>({
+// "v2": the first, Russian version kept different defaults (decimal comma)
+const stored = load<Partial<Settings>>('settings-v2', {})
+export const settings = $state<Settings>({
+  ...DEFAULT_SETTINGS,
+  ...stored,
+  formatDigits: { ...DEFAULT_DIGITS, ...stored.formatDigits },
+})
+
+/** What the engine needs from the settings. */
+export function calcSettings(s: Settings = settings): CalcSettings {
+  return {
+    angle: s.angle,
+    decimal: s.decimal,
+    format: s.format,
+    digits: s.formatDigits[s.format],
+    mixedNumbers: s.mixedNumbers,
+  }
+}
+
+/** `latex` is the content of the textbook-style calculator field; `page` the key page shown. */
+export const ui = $state<{ tab: Tab; latex: string; page: string }>({
   tab: 'calc',
   latex: '',
-  sciOpen: false,
-  ...load('ui', {}),
+  page: 'main',
+  ...load('ui-v2', {}),
 })
 
 export const wide = new MediaQuery('min-width: 840px')
@@ -37,7 +76,7 @@ export interface HistoryEntry {
   /** The answer as a decimal: shown and plain (for copying and inserting). */
   text: string
   plain: string
-  /** The answer as a textbook fraction, when there is one, and whether it was shown that way. */
+  /** The answer as a fraction, when there is one, and whether it was shown that way. */
   fraction?: string
   showFraction?: boolean
   at: number
@@ -52,7 +91,7 @@ export function addHistory(entry: HistoryEntry) {
   if (history.items.length > HISTORY_LIMIT) history.items.splice(0, history.items.length - HISTORY_LIMIT)
 }
 
-// ---- notebook ----
+// ---- notes ----
 
 export interface Sheet {
   id: string
@@ -60,71 +99,46 @@ export interface Sheet {
   text: string
 }
 
-const EXAMPLE = `# Это блокнот: пишите расчёты строками, ответ справа
-Аренда: 30 000
-еда = 15 000
-транспорт = 4 500
-итого
-итого * 12
+const EXAMPLE = `# Notes: one calculation per line, the answer appears on the right
+Rent: 1 200
+food = 450
+transport = 90
+total
+total * 12
 
-# Переменные можно использовать дальше
-еда / 30
+# Variables can be used further down
+food / 30
 
-# Единицы и валюты
-5 км в м
-2 кг + 300 г
-100 $ в руб`
+# Units
+5 km to m
+2 kg + 300 g
+9.81 m/s^2 * 2 s`
 
-export function newSheet(title = 'Новый лист', text = ''): Sheet {
+export function newSheet(title = 'New sheet', text = ''): Sheet {
   return { id: Math.random().toString(36).slice(2, 10), title, text }
 }
 
 function initialNotebook() {
-  const sheet = newSheet('Пример', EXAMPLE)
+  const sheet = newSheet('Example', EXAMPLE)
   return { sheets: [sheet], current: sheet.id }
 }
 
-export const notebook = $state<{ sheets: Sheet[]; current: string }>(load('notebook', null) ?? initialNotebook())
+export const notebook = $state<{ sheets: Sheet[]; current: string }>(load('notes-v2', null) ?? initialNotebook())
 
-// ---- converter ----
+// ---- unit converter ----
 
-export const converter = $state<{ category: string; amount: string; side: 'a' | 'b'; pairs: Record<string, [string, string]> }>({
+export const converter = $state<{
+  category: string
+  amount: string
+  side: 'a' | 'b'
+  pairs: Record<string, [string, string]>
+}>({
   category: 'length',
   amount: '1',
   side: 'a',
   pairs: {},
-  ...load('converter', {}),
+  ...load('converter-v2', {}),
 })
-
-// ---- currency rates ----
-
-const RATES_MAX_AGE = 6 * 60 * 60 * 1000
-
-export const currency = $state<{ rates: Rates | null; version: number; loading: boolean; error: string }>({
-  rates: load<Rates | null>('rates', null),
-  version: 0,
-  loading: false,
-  error: '',
-})
-
-if (currency.rates) applyRates(currency.rates)
-
-export async function refreshRates(force = false) {
-  if (currency.loading) return
-  if (!force && currency.rates && Date.now() - currency.rates.fetched < RATES_MAX_AGE) return
-  currency.loading = true
-  currency.error = ''
-  try {
-    const rates = await fetchRates()
-    applyRates(rates)
-    currency.rates = rates
-    currency.version++
-  } catch {
-    currency.error = navigator.onLine ? 'Не удалось загрузить курсы' : 'Нет интернета — курсы не обновлены'
-  } finally {
-    currency.loading = false
-  }
-}
 
 // ---- small helpers ----
 
@@ -145,9 +159,9 @@ export function showToast(message: string) {
 export async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text)
-    showToast('Скопировано')
+    showToast('Copied')
   } catch {
-    showToast('Не удалось скопировать')
+    showToast('Could not copy')
   }
 }
 
@@ -169,12 +183,9 @@ if (typeof window !== 'undefined') {
 // ---- persistence ----
 
 $effect.root(() => {
-  $effect(() => save('settings', $state.snapshot(settings)))
-  $effect(() => save('ui', $state.snapshot(ui)))
+  $effect(() => save('settings-v2', $state.snapshot(settings)))
+  $effect(() => save('ui-v2', $state.snapshot(ui)))
   $effect(() => save('history', $state.snapshot(history.items)))
-  $effect(() => save('notebook', $state.snapshot(notebook)))
-  $effect(() => save('converter', $state.snapshot(converter)))
-  $effect(() => {
-    if (currency.rates) save('rates', $state.snapshot(currency.rates))
-  })
+  $effect(() => save('notes-v2', $state.snapshot(notebook)))
+  $effect(() => save('converter-v2', $state.snapshot(converter)))
 })
