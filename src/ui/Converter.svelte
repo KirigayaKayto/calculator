@@ -82,8 +82,60 @@
       pair: ['atm', 'kPa'],
       units: [
         u('Pa', 'Pascal'), u('kPa', 'Kilopascal'), u('MPa', 'Megapascal'), u('bar', 'Bar'), u('atm', 'Atmosphere'),
-        u('mmHg', 'Millimetre of mercury'), u('torr', 'Torr'), u('psi', 'Pound per square inch'),
+        u('mmHg', 'Millimetre of mercury'), u('inHg', 'Inch of mercury'), u('torr', 'Torr'),
+        u('psi', 'Pound per square inch'),
       ],
+    },
+    {
+      id: 'density',
+      label: 'Density',
+      pair: ['g/cm^3', 'kg/m^3'],
+      units: [
+        u('kg/m^3', 'Kilogram per cubic metre'), u('g/cm^3', 'Gram per cubic centimetre'), u('g/L', 'Gram per litre'),
+        u('kg/L', 'Kilogram per litre'), u('lbm/ft^3', 'Pound per cubic foot'),
+      ],
+    },
+    {
+      id: 'torque',
+      label: 'Torque',
+      pair: ['N*m', 'lbf*ft'],
+      units: [u('N*m', 'Newton-metre'), u('kN*m', 'Kilonewton-metre'), u('lbf*ft', 'Pound-foot'), u('lbf*inch', 'Pound-inch')],
+    },
+    {
+      id: 'angular-speed',
+      label: 'Angular speed',
+      pair: ['rev/min', 'rad/s'],
+      units: [u('rad/s', 'Radian per second'), u('deg/s', 'Degree per second'), u('rev/s', 'Revolution per second'), u('rev/min', 'Revolution per minute')],
+    },
+    {
+      id: 'charge',
+      label: 'Charge',
+      pair: ['mAh', 'C'],
+      units: [u('nC', 'Nanocoulomb'), u('uC', 'Microcoulomb'), u('mC', 'Millicoulomb'), u('C', 'Coulomb'), u('mAh', 'Milliampere-hour'), u('Ah', 'Ampere-hour')],
+    },
+    {
+      id: 'current',
+      label: 'Current',
+      pair: ['mA', 'A'],
+      units: [u('uA', 'Microampere'), u('mA', 'Milliampere'), u('A', 'Ampere'), u('kA', 'Kiloampere')],
+    },
+    {
+      id: 'magnetic',
+      label: 'Magnetic field',
+      pair: ['T', 'gauss'],
+      units: [u('nT', 'Nanotesla'), u('uT', 'Microtesla'), u('mT', 'Millitesla'), u('T', 'Tesla'), u('gauss', 'Gauss')],
+    },
+    {
+      id: 'activity',
+      label: 'Radioactivity',
+      pair: ['Ci', 'GBq'],
+      units: [u('Bq', 'Becquerel'), u('kBq', 'Kilobecquerel'), u('MBq', 'Megabecquerel'), u('GBq', 'Gigabecquerel'), u('uCi', 'Microcurie'), u('mCi', 'Millicurie'), u('Ci', 'Curie')],
+    },
+    {
+      id: 'dose',
+      label: 'Radiation dose',
+      pair: ['mSv', 'rem'],
+      units: [u('uSv', 'Microsievert'), u('mSv', 'Millisievert'), u('Sv', 'Sievert'), u('rem', 'Rem'), u('mGy', 'Milligray'), u('Gy', 'Gray')],
     },
     {
       id: 'area',
@@ -113,7 +165,7 @@
       id: 'frequency',
       label: 'Frequency',
       pair: ['rpm', 'Hz'],
-      units: [u('Hz', 'Hertz'), u('kHz', 'Kilohertz'), u('MHz', 'Megahertz'), u('GHz', 'Gigahertz'), u('rpm', 'Revolutions per minute')],
+      units: [u('Hz', 'Hertz'), u('kHz', 'Kilohertz'), u('MHz', 'Megahertz'), u('GHz', 'Gigahertz'), u('rpm', 'Revolution per minute')],
     },
     {
       id: 'data',
@@ -122,6 +174,15 @@
       units: [
         u('b', 'Bit'), u('B', 'Byte'), u('kB', 'Kilobyte'), u('MB', 'Megabyte'), u('GB', 'Gigabyte'), u('TB', 'Terabyte'),
         u('KiB', 'Kibibyte'), u('MiB', 'Mebibyte'), u('GiB', 'Gibibyte'),
+      ],
+    },
+    {
+      id: 'data-rate',
+      label: 'Data rate',
+      pair: ['Mb/s', 'MB/s'],
+      units: [
+        u('kb/s', 'Kilobit per second'), u('Mb/s', 'Megabit per second'), u('Gb/s', 'Gigabit per second'),
+        u('kB/s', 'Kilobyte per second'), u('MB/s', 'Megabyte per second'), u('GB/s', 'Gigabyte per second'),
       ],
     },
   ]
@@ -184,7 +245,9 @@
 <div class="converter">
   <div class="categories" role="tablist" aria-label="Quantity">
     {#each CATEGORIES as c (c.id)}
-      <button role="tab" aria-selected={c.id === category.id} onclick={() => (converter.category = c.id)}>{c.label}</button>
+      <button role="tab" aria-selected={c.id === category.id} onclick={() => (converter.category = c.id)} {@attach (el) => {
+        if (c.id === category.id) el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      }}>{c.label}</button>
     {/each}
   </div>
 
@@ -247,13 +310,28 @@
     gap: 12px;
   }
 
+  /* on a phone: two rows that scroll sideways; on a wide screen they all fit */
   .categories {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(2, auto);
+    justify-content: start;
     gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  @media (min-width: 840px) {
+    .categories {
+      display: flex;
+      flex-wrap: wrap;
+    }
   }
 
   .categories button {
+    white-space: nowrap;
     min-height: 40px;
     padding: 0 14px;
     border-radius: 999px;

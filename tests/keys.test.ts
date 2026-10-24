@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { customKey, KEYS, PAGES, PAGE_SIZE } from '../src/ui/keys'
+import { customKey, KEYS, KEY_LIST, PAGES, pageSize } from '../src/ui/keys'
 
 describe('key layout', () => {
+  it('has one key per id', () => {
+    const ids = KEY_LIST.map((k) => k.id)
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([])
+  })
   it('has full pages of known keys', () => {
     for (const page of PAGES) {
-      expect(page.keys).toHaveLength(PAGE_SIZE)
+      expect(page.keys).toHaveLength(pageSize(page))
       for (const id of page.keys) expect(KEYS[id], `${page.id}: ${id}`).toBeDefined()
     }
   })

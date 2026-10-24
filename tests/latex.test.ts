@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { latexToExpr, balanceParens } from '../src/engine/latex'
-import { calculateLatex, type CalcSettings } from '../src/engine/calc'
+import { latexToExpr, balanceParens, identifierLatex } from '../src/engine/latex'
+import { calculateLatex, newScope, type CalcSettings } from '../src/engine/calc'
 import { toFraction, fractionLatex, fractionPlain, prefersFraction } from '../src/engine/exact'
 
 const BASE: CalcSettings = { angle: 'deg', decimal: '.', digits: 16 }
@@ -52,6 +52,28 @@ describe('latex to expression', () => {
     expect(latexToExpr('\\operatorname{nPr}\\left(5,2\\right)')).toBe('permutations(5,2)')
     expect(latexToExpr('\\lfloor2.7\\rfloor')).toBe('floor(2.7)')
     expect(latexToExpr('\\left\\lceil2.1\\right\\rceil')).toBe('ceil(2.1)')
+  })
+  it('reads Greek letters and subscripts as names', () => {
+    expect(latexToExpr('\\alpha+\\beta').replace(/\s+/g, '')).toBe('alpha+beta')
+    // gamma, zeta, tau and phi are also mathjs functions or constants: the letters get their own names
+    expect(latexToExpr('\\gamma\\cdot2').replace(/\s+/g, '')).toBe('gamma_*2')
+    expect(latexToExpr('v_0+v_{max}').replace(/\s+/g, '')).toBe('v_0+v_max')
+    expect(latexToExpr('\\gamma_{0}').replace(/\s+/g, '')).toBe('gamma_0')
+    expect(latexToExpr('ax_1', { splitLetters: true }).replace(/\s+/g, ' ').trim()).toBe('a x_1')
+  })
+  it('writes names back as LaTeX', () => {
+    expect(identifierLatex('alpha')).toBe('\\alpha')
+    expect(identifierLatex('gamma_')).toBe('\\gamma')
+    expect(identifierLatex('gamma')).toBe('\\gamma')
+    expect(identifierLatex('gamma_0')).toBe('\\gamma_{0}')
+    expect(identifierLatex('v_max')).toBe('v_{max}')
+    expect(identifierLatex('x')).toBe('x')
+  })
+  it('computes with Greek variables', () => {
+    const scope = newScope('deg')
+    calculateLatex('\\alpha=3', BASE, scope)
+    calculateLatex('\\tau=2', BASE, scope)
+    expect(calculateLatex('2\\alpha+\\tau', BASE, scope)).toMatchObject({ ok: true, text: '8' })
   })
 })
 

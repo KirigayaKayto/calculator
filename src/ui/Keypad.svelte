@@ -7,8 +7,8 @@
   import type { Angle } from '../engine/math'
 
   interface Props {
-    /** A key was pressed on the given page. */
-    onkey: (key: Key, page: string) => void
+    /** A key was pressed on the given page; `sticky`: the page stays open after it (letters). */
+    onkey: (key: Key, page: string, sticky: boolean) => void
     onpage: (page: string) => void
     page: string
     decimal: DecimalMark
@@ -42,11 +42,19 @@
     return key
   }
 
-  const pageById = (id: string) => pages.find((p) => p.id === id) ?? pages[0]
+  // a page missing from a saved layout (one added in a later version) comes from the defaults
+  const pageById = (id: string) => pages.find((p) => p.id === id) ?? PAGES.find((p) => p.id === id) ?? pages[0]
   const main = $derived(pageById('main'))
-  const sidePages = $derived(pages.filter((p) => p.id !== 'main'))
+  const sidePages = $derived(pages.filter((p) => p.id !== 'main' && !p.hidden))
   const shown = $derived(wide ? (page === 'main' ? (sidePages[0] ?? main) : pageById(page)) : pageById(page))
-  const tabs = $derived(wide ? sidePages : pages)
+  const tabs = $derived((wide ? sidePages : pages).filter((p) => !p.hidden))
+  /** The tab to light up: a hidden page (Greek) belongs to the one that opens it (abc). */
+  const activeTab = $derived(shown.hidden ? 'abc' : shown.id)
+
+  function press(key: Key, pageId: string) {
+    if (key.page) return onpage(key.page)
+    onkey(key, pageId, !!pageById(pageId).sticky)
+  }
 
   // keep the cursor in the formula: buttons must not take focus on mouse/touch
   function keepFocus(e: MouseEvent) {
@@ -59,11 +67,11 @@
   {#if key}
     <button
       class="key {key.kind}"
-      class:pressed={id === 'inv' && inv}
+      class:pressed={(id === 'inv' || id === 'shift') && inv}
       aria-label={key.aria}
-      aria-pressed={id === 'inv' ? inv : undefined}
+      aria-pressed={id === 'inv' || id === 'shift' ? inv : undefined}
       onmousedown={keepFocus}
-      onclick={() => onkey(key, pageId)}
+      onclick={() => press(key, pageId)}
     >
       {#if key.icon}
         <Icon name={key.icon} size={24} />
@@ -80,14 +88,14 @@
 
 <div class="pad" class:wide class:compact>
   <div class="bar">
-    <button class="nav" aria-label="Move cursor left" onmousedown={keepFocus} onclick={() => onkey(KEYS.left, shown.id)}>
+    <button class="nav" aria-label="Move cursor left" onmousedown={keepFocus} onclick={() => onkey(KEYS.left, shown.id, true)}>
       <Icon name="chevron-left" size={22} />
     </button>
     <div class="tabs" role="tablist" aria-label="Key pages">
       {#each tabs as p (p.id)}
         <button
           role="tab"
-          aria-selected={shown.id === p.id}
+          aria-selected={activeTab === p.id}
           onmousedown={keepFocus}
           onclick={() => onpage(p.id)}
         >
@@ -95,19 +103,19 @@
         </button>
       {/each}
     </div>
-    <button class="nav" aria-label="Move cursor right" onmousedown={keepFocus} onclick={() => onkey(KEYS.right, shown.id)}>
+    <button class="nav" aria-label="Move cursor right" onmousedown={keepFocus} onclick={() => onkey(KEYS.right, shown.id, true)}>
       <Icon name="chevron-right" size={22} />
     </button>
   </div>
 
   <div class="grids">
-    <div class="grid" role="group" aria-label={shown.label}>
+    <div class="grid" role="group" aria-label={shown.label} style:--cols={shown.cols ?? 5}>
       {#each shown.keys as id, i (i)}
         {@render button(id, shown.id)}
       {/each}
     </div>
     {#if wide}
-      <div class="grid" role="group" aria-label={main.label}>
+      <div class="grid" role="group" aria-label={main.label} style:--cols={main.cols ?? 5}>
         {#each main.keys as id, i (i)}
           {@render button(id, main.id)}
         {/each}
@@ -195,7 +203,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(var(--cols, 5), 1fr);
     grid-auto-rows: var(--row);
     gap: 6px;
   }

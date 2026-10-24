@@ -100,6 +100,9 @@ const UNIT_NAMES: [RegExp, string][] = [
   [/\bdeg\b/g, '°'],
   [/\^2\b/g, '²'],
   [/\^3\b/g, '³'],
+  [/\*/g, '·'],
+  // micro: um, us, uT, uSv → µm, µs, µT, µSv (u alone is the atomic mass unit)
+  [/\bu(?=[A-Z]|[msgL]\b)/g, 'µ'],
 ]
 
 export function formatUnitName(name: string, plain?: boolean): string {

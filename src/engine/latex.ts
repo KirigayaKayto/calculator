@@ -156,20 +156,6 @@ const SYMBOLS: Record<string, string> = {
   gt: '>',
   // f′(x): the derivative of a function defined in the graph
   prime: '__prime',
-  // Greek letters used as variables
-  alpha: ' alpha ',
-  beta: ' beta ',
-  gamma: ' gamma ',
-  delta: ' delta ',
-  theta: ' theta ',
-  lambda: ' lambda ',
-  mu: ' mu ',
-  rho: ' rho ',
-  tau: ' tau ',
-  phi: ' phi ',
-  varphi: ' phi ',
-  omega: ' omega ',
-  Delta: ' Delta ',
   ',': ' ',
   ';': ' ',
   ':': ' ',
@@ -183,6 +169,63 @@ const SYMBOLS: Record<string, string> = {
   rbrace: ')',
   lbrack: '(',
   rbrack: ')',
+}
+
+/**
+ * Greek letters as variable names. Names mathjs already uses (γ would be its gamma function,
+ * φ the golden ratio, τ = 2π) get an underscore, so an undefined γ is reported, not misread.
+ */
+export const GREEK: Record<string, string> = {
+  alpha: 'alpha',
+  beta: 'beta',
+  gamma: 'gamma_',
+  delta: 'delta',
+  epsilon: 'epsilon',
+  varepsilon: 'epsilon',
+  zeta: 'zeta_',
+  eta: 'eta',
+  theta: 'theta',
+  vartheta: 'theta',
+  iota: 'iota',
+  kappa: 'kappa',
+  lambda: 'lambda',
+  mu: 'mu',
+  nu: 'nu',
+  xi: 'xi',
+  rho: 'rho',
+  sigma: 'sigma',
+  tau: 'tau_',
+  upsilon: 'upsilon',
+  phi: 'phi_',
+  varphi: 'phi_',
+  chi: 'chi',
+  psi: 'psi',
+  omega: 'omega',
+  Gamma: 'Gamma',
+  Delta: 'Delta',
+  Theta: 'Theta',
+  Lambda: 'Lambda',
+  Xi: 'Xi',
+  Pi: 'Pi',
+  Sigma: 'Sigma',
+  Upsilon: 'Upsilon',
+  Phi: 'Phi',
+  Psi: 'Psi',
+  Omega: 'Omega',
+}
+
+const GREEK_LATEX = Object.fromEntries(Object.entries(GREEK).reverse().map(([cmd, name]) => [name, `\\${cmd}`]))
+
+/**
+ * A variable name as LaTeX: gamma_ → \gamma, x_1 → x_{1}, gamma_0 → \gamma_{0}.
+ * Takes the names of this engine and of the CAS (which calls \gamma "gamma").
+ */
+export function identifierLatex(name: string): string {
+  const greek = (n: string) => GREEK_LATEX[n] ?? GREEK_LATEX[`${n}_`]
+  if (greek(name)) return greek(name)
+  const m = /^([A-Za-z]+)_(\w+)$/.exec(name)
+  if (m) return `${greek(m[1]) ?? m[1]}_{${m[2]}}`
+  return name
 }
 
 const LEFT = new Set(['left', 'mleft', 'bigl', 'Bigl', 'biggl', 'Biggl'])
@@ -497,7 +540,8 @@ class Parser {
           return `${out}^(${exponent})`
         }
         case '_':
-          return `${out}_${this.arg().trim()}`
+          // a subscript is part of the name: v_0, v_max, \gamma_0 → gamma_0
+          return `${out.trimEnd().replace(/_$/, '')}_${this.arg().replace(/\s+/g, '')}`
         case '|':
           this.absOpen = !this.absOpen
           return out + (this.absOpen ? 'abs(' : ')')
@@ -552,6 +596,7 @@ class Parser {
     }
     if (cmd === 'placeholder') throw new IncompleteError()
     if (cmd in FUNCTIONS) return this.func(FUNCTIONS[cmd], out)
+    if (cmd in GREEK) return `${out} ${GREEK[cmd]} `
     if (cmd in SYMBOLS) return out + SYMBOLS[cmd]
     if (IGNORED.has(cmd)) return out
     throw new CalcError(`Not supported: \\${cmd}`)

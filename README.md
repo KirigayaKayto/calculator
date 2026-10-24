@@ -10,12 +10,26 @@ A calculator for university calculus and physics, for Android and PC. Everything
   - **Calc:** d/dx, d²/dx², d/dx at a point, ∫, ∫ₐᵇ, lim, Σ, Π, Taylor series, factor, expand, equations.
   - **Phys:** 20 CODATA 2022 constants, ±, vectors, matrices, i and r∠θ.
   - **Units.**
+  - **abc:** letters (⇧ for capitals), and from there Greek letters, subscripts (v₀) and primes (f′).
 - **Symbolic answers.**
   - Derivatives, integrals, limits, series, and solving equations; "Solve for" asks which letter to solve for.
   - The symbolic engine (Compute Engine) loads in the background the first time it is needed.
 - **Number formats.** Auto, Fix n, Sci n, Eng n, Sig n, and **Lab**: significant figures by the lab rules, worked out from the numbers you typed.
 - **Measurements.** (2.0 ± 0.1)·(3.0 ± 0.2) = 6.0 ± 0.5: uncertainties are propagated and rounded by convention.
-- **Units.** 9.81 m/s² · 2 s, 5 km → m, mₑc² → MeV. Converter and constants table under *Tools*.
+- **Units.** 9.81 m/s² · 2 s, 5 km → m, mₑc² → MeV.
+- **Tools:**
+  - **Units:** a converter with 24 quantities, from length to radiation dose and data rate.
+  - **Constants:** a searchable table.
+  - **Base:** a programmer's calculator.
+    - HEX, DEC, OCT and BIN side by side, in 8–64-bit words, signed or unsigned.
+    - AND, OR, XOR, NOT, NAND, NOR, shifts, rotations (ROL, ROR typed) and mod.
+    - Bits you flip with a tap, and the character for a code.
+  - **Stats:**
+    - mean, median, standard deviations, standard error and quartiles;
+    - a least-squares line with the errors of the slope and the intercept.
+  - **Integers:**
+    - prime test, factorization, divisors, φ, GCD and LCM;
+    - aᵇ mod m and inverses mod m.
 - **Graph**, a Desmos-like worksheet:
   - y = f(x), f(x) = … and f′(x), x = g(y);
   - implicit curves and inequalities;
@@ -46,6 +60,7 @@ npm run preview   # look at the build: http://localhost:4173
   - `exact.ts` finds fractions.
   - `lab.ts` handles significant figures and uncertainties.
   - `constants.ts` holds the CODATA constants.
+  - `programmer.ts`, `stats.ts` and `integers.ts` are the engines of the Base, Stats and Integers tools.
 - `src/cas/`: the symbolic engine in a web worker.
 - `src/graph/`: the graph worksheet.
   - `model.ts` works out what each line means.

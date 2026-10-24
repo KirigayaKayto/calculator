@@ -87,7 +87,11 @@ describe('worksheet lines', () => {
     expect(only(slider, 'variable').slider).toBe(true)
   })
   it('offers sliders for letters never defined', () => {
-    expect(sheet('y=kx+m').missing.sort()).toEqual(['k', 'm'])
+    const { items, missing } = sheet('y=kx+m')
+    expect(missing.sort()).toEqual(['k', 'm'])
+    // until they get values, the curve has no points (and does not fail)
+    expect(only(items[0], 'curve').f(1)).toBeNaN()
+    expect(sheet('y=\\omega_{0}x').missing).toEqual(['omega_0'])
   })
   it('understands implicit curves, inequalities, points, parametric and polar curves', () => {
     const [circle, below, point, param, polar] = sheet(

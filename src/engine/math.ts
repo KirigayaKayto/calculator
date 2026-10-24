@@ -14,7 +14,8 @@ export const math: MathJsInstance = create(all, {
 
 // ---- units mathjs does not have ----
 
-const EXTRA_UNITS: [string, string, string[]?][] = [
+// [name, definition, aliases, prefixed: kBq, mSv, µGy…]
+const EXTRA_UNITS: [string, string, string[]?, boolean?][] = [
   ['cal', '4.184 J', ['calorie', 'calories']],
   ['kcal', '4184 J', ['kilocalorie', 'kilocalories']],
   ['knot', '1852 m/h', ['knots', 'kn']],
@@ -23,13 +24,21 @@ const EXTRA_UNITS: [string, string, string[]?][] = [
   ['au', '149597870700 m'],
   ['pc', '30856775814913673 m', ['parsec', 'parsecs']],
   ['rpm', '1/min'],
+  ['rev', '360 deg', ['revolution', 'revolutions']],
+  ['Bq', '1/s', ['becquerel'], true],
+  ['Ci', '3.7e10 Bq', ['curie'], true],
+  ['Gy', '1 J/kg', ['gray'], true],
+  ['Sv', '1 J/kg', ['sievert'], true],
+  ['rem', '0.01 Sv', [], true],
+  ['gauss', '1e-4 T'],
+  ['inHg', '3386.389 Pa'],
 ]
 
 const isUnit = (math as unknown as { Unit: { isValuelessUnit: (name: string) => boolean } }).Unit.isValuelessUnit
 
-for (const [name, definition, aliases = []] of EXTRA_UNITS) {
+for (const [name, definition, aliases = [], prefixed] of EXTRA_UNITS) {
   if (isUnit(name)) continue
-  math.createUnit(name, { definition, aliases: aliases.filter((a) => !isUnit(a)) })
+  math.createUnit(name, { definition, aliases: aliases.filter((a) => !isUnit(a)), prefixes: prefixed ? 'short' : undefined })
 }
 
 // ---- functions that behave like a calculator ----

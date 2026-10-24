@@ -179,6 +179,14 @@ export function evaluateWorksheet(lines: Line[]): Worksheet {
     for (const [id, make] of helpers) if (!scope.has(id)) scope.set(id, (make as (s: ScopeLike) => unknown)(scope))
     return Number(code.evaluate(scope))
   }
+  /** What is drawn gives no points, instead of failing, while a name has no value yet (y = kx before k). */
+  const drawn = (f: Fn): Fn => (t) => {
+    try {
+      return f(t)
+    } catch {
+      return NaN
+    }
+  }
 
   const items = parsed.map((p, i): Item => {
     if (!p) return { kind: 'empty' }
@@ -187,7 +195,7 @@ export function evaluateWorksheet(lines: Line[]): Worksheet {
     try {
       const fd = functions.get(i)
       if (fd) {
-        return { kind: 'function', name: fd.name, param: fd.param, f: fd.param === 'x' ? (scope.get(fd.name) as Fn) : null }
+        return { kind: 'function', name: fd.name, param: fd.param, f: fd.param === 'x' ? drawn(scope.get(fd.name) as Fn) : null }
       }
       const v = variables.get(i)
       if (v) {
@@ -203,9 +211,9 @@ export function evaluateWorksheet(lines: Line[]): Worksheet {
         note(lhs)
         note(rhs)
         if (op === '=') {
-          if (lhs === 'y' && !symbolsOf(rhs).has('y')) return { kind: 'curve', axis: 'y', f: fnOf(rhs, 'x') }
-          if (lhs === 'x' && !symbolsOf(rhs).has('x')) return { kind: 'curve', axis: 'x', f: fnOf(rhs, 'y') }
-          if (lhs === 'r') return { kind: 'polar', r: fnOf(rhs, 'theta'), range: [0, 2 * Math.PI] }
+          if (lhs === 'y' && !symbolsOf(rhs).has('y')) return { kind: 'curve', axis: 'y', f: drawn(fnOf(rhs, 'x')) }
+          if (lhs === 'x' && !symbolsOf(rhs).has('x')) return { kind: 'curve', axis: 'x', f: drawn(fnOf(rhs, 'y')) }
+          if (lhs === 'r') return { kind: 'polar', r: drawn(fnOf(rhs, 'theta')), range: [0, 2 * Math.PI] }
           // anything else with "=" is an implicit curve: F(x, y) = lhs − rhs = 0
           const code = compile(`(${lhs}) - (${rhs})`, helpers)
           const xLayer = new Layer(scope, 'x', 0)
@@ -215,12 +223,16 @@ export function evaluateWorksheet(lines: Line[]): Worksheet {
             f: (x, y) => {
               xLayer.value = x
               yLayer.value = y
-              return Number(code.evaluate(yLayer))
+              try {
+                return Number(code.evaluate(yLayer))
+              } catch {
+                return NaN
+              }
             },
           }
         }
-        if (lhs === 'y' && !symbolsOf(rhs).has('y')) return { kind: 'curve', axis: 'y', f: fnOf(rhs, 'x'), relation: op }
-        if (rhs === 'y' && !symbolsOf(lhs).has('y')) return { kind: 'curve', axis: 'y', f: fnOf(lhs, 'x'), relation: FLIP[op] }
+        if (lhs === 'y' && !symbolsOf(rhs).has('y')) return { kind: 'curve', axis: 'y', f: drawn(fnOf(rhs, 'x')), relation: op }
+        if (rhs === 'y' && !symbolsOf(lhs).has('y')) return { kind: 'curve', axis: 'y', f: drawn(fnOf(lhs, 'x')), relation: FLIP[op] }
         return { kind: 'error', message: 'Write inequalities as y < f(x) or y > f(x)' }
       }
 
@@ -229,7 +241,7 @@ export function evaluateWorksheet(lines: Line[]): Worksheet {
         note(pair[0])
         note(pair[1])
         const symbols = new Set([...symbolsOf(pair[0]), ...symbolsOf(pair[1])])
-        if (symbols.has('t')) return { kind: 'parametric', x: fnOf(pair[0], 't'), y: fnOf(pair[1], 't'), range: [0, 2 * Math.PI] }
+        if (symbols.has('t')) return { kind: 'parametric', x: drawn(fnOf(pair[0], 't')), y: drawn(fnOf(pair[1], 't')), range: [0, 2 * Math.PI] }
         return { kind: 'point', x: valueOf(pair[0]), y: valueOf(pair[1]) }
       }
 
@@ -242,7 +254,7 @@ export function evaluateWorksheet(lines: Line[]): Worksheet {
         const hi = valueOf(b.toString())
         return { kind: 'integral', value: integrate(f, lo, hi), f, a: lo, b: hi }
       }
-      if (symbolsOf(expr).has('x')) return { kind: 'curve', axis: 'y', f: fnOf(expr, 'x') }
+      if (symbolsOf(expr).has('x')) return { kind: 'curve', axis: 'y', f: drawn(fnOf(expr, 'x')) }
       return { kind: 'value', value: valueOf(expr) }
     } catch (e) {
       return { kind: 'error', message: translateError(e) }

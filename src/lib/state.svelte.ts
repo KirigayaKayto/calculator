@@ -5,8 +5,9 @@ import type { Angle } from '../engine/math'
 import type { DecimalMark } from '../engine/input'
 import type { FormatMode } from '../engine/format'
 import type { Line } from '../graph/model'
-import type { Page } from '../ui/keys'
+import { PAGES, type Page } from '../ui/keys'
 import type { ViewState } from '../ui/GraphCanvas.svelte'
+import type { Radix, WordSize } from '../engine/programmer'
 
 export type Theme = 'system' | 'light' | 'dark'
 export type Tab = 'calc' | 'graph' | 'units'
@@ -81,12 +82,28 @@ export interface CustomKeyData {
   formula: string
 }
 
-/** `pages` is null until the person changes the layout: then the defaults apply. */
-export const keyLayout = $state<{ pages: Page[] | null; custom: CustomKeyData[] }>({
+/**
+ * `pages` is null until the person changes the layout: then the defaults apply.
+ * `known`: the default pages the layout already had a say about (kept, moved or deleted).
+ */
+export const keyLayout = $state<{ pages: Page[] | null; custom: CustomKeyData[]; known?: string[] }>({
   pages: null,
   custom: [],
   ...load('keys-v1', {}),
 })
+
+/** The default pages before the letter pages came: what a layout without `known` knew. */
+const FIRST_PAGES = ['main', 'func', 'calc', 'phys', 'units']
+
+/** Default pages added in a later version join a saved layout, after the person's own. */
+export function addNewPages() {
+  if (!keyLayout.pages) return
+  const known = new Set(keyLayout.known ?? FIRST_PAGES)
+  keyLayout.pages.push(...structuredClone(PAGES.filter((p) => !known.has(p.id))))
+  keyLayout.known = PAGES.map((p) => p.id)
+}
+
+addNewPages()
 
 /** Something another screen asked the calculator to insert (a constant from Tools). Not saved. */
 export const pending = $state<{ insert: string | null }>({ insert: null })
@@ -158,7 +175,7 @@ export const graph = $state<{ lines: Line[]; view: ViewState; selected: string |
 
 export const converter = $state<{
   /** Which tool the Tools tab shows. */
-  tool?: 'units' | 'constants'
+  tool?: 'units' | 'constants' | 'base' | 'stats' | 'integers'
   category: string
   amount: string
   side: 'a' | 'b'
@@ -169,6 +186,34 @@ export const converter = $state<{
   side: 'a',
   pairs: {},
   ...load('converter-v2', {}),
+})
+
+
+// ---- programmer, statistics and whole-number tools ----
+
+export const programmer = $state<{
+  expr: string
+  /** The radix the expression is typed in. */
+  radix: Radix
+  bits: WordSize
+  signed: boolean
+  /** Under the display: the keys, or the word's bits to flip. */
+  view: 'keys' | 'bits'
+}>({ expr: '', radix: 10, bits: 32, signed: true, view: 'keys', ...load('programmer-v1', {}) })
+
+export const statsTool = $state<{ mode: 'list' | 'pairs'; list: string; pairs: string }>({
+  mode: 'list',
+  list: '',
+  pairs: '',
+  ...load('stats-v1', {}),
+})
+
+export const integerTool = $state<{ input: string; a: string; b: string; m: string }>({
+  input: '',
+  a: '',
+  b: '',
+  m: '',
+  ...load('integers-v1', {}),
 })
 
 // ---- small helpers ----
@@ -220,4 +265,7 @@ $effect.root(() => {
   $effect(() => save('graph-v1', $state.snapshot(graph)))
   $effect(() => save('keys-v1', $state.snapshot(keyLayout)))
   $effect(() => save('converter-v2', $state.snapshot(converter)))
+  $effect(() => save('programmer-v1', $state.snapshot(programmer)))
+  $effect(() => save('stats-v1', $state.snapshot(statsTool)))
+  $effect(() => save('integers-v1', $state.snapshot(integerTool)))
 })

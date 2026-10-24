@@ -4,6 +4,7 @@
   import { evaluateWorksheet, type Item, type Line } from '../graph/model'
   import { formatBig } from '../engine/format'
   import { math } from '../engine/math'
+  import { identifierLatex } from '../engine/latex'
   import { graph, settings, wide, short, PALETTE, newId, haptic } from '../lib/state.svelte'
   import { latexMarkup, numberLatex } from '../lib/markup'
   import GraphCanvas, { type Plot } from './GraphCanvas.svelte'
@@ -48,7 +49,7 @@
   }
 
   function addSlider(name: string) {
-    addLine(graph.lines.length - 1, `${name}=1`)
+    addLine(graph.lines.length - 1, `${identifierLatex(name)}=1`)
   }
 
   // ---- sliders ----
@@ -60,7 +61,7 @@
   function setSlider(line: Line, item: Extract<Item, { kind: 'variable' }>, value: number) {
     const { step } = sliderOf(line)
     const decimals = Math.max(0, -Math.floor(Math.log10(step) + 1e-9))
-    line.latex = `${item.name}=${value.toFixed(decimals).replace('.', settings.decimal === ',' ? '{,}' : '.')}`
+    line.latex = `${identifierLatex(item.name)}=${value.toFixed(decimals).replace('.', settings.decimal === ',' ? '{,}' : '.')}`
   }
 
   function setRange(line: Line, key: 'min' | 'max', text: string) {
@@ -92,7 +93,7 @@
     field = null
   }
 
-  function onkey(key: Key, fromPage: string) {
+  function onkey(key: Key, fromPage: string, sticky: boolean) {
     haptic()
     const f = field
     if (!f) return
@@ -103,7 +104,7 @@
     if (key.kind === 'sci') inv = false
     const line = graph.lines.find((l) => l.id === editing)
     if (line) line.latex = f.value
-    if (fromPage !== 'main' && !sideBySide && settings.autoReturn && !['inv', 'left', 'right'].includes(key.id)) page = 'main'
+    if (fromPage !== 'main' && !sticky && !sideBySide && settings.autoReturn && !['left', 'right'].includes(key.id)) page = 'main'
   }
 
   function onfocusout(e: FocusEvent) {
@@ -201,7 +202,7 @@
       <div class="missing">
         <span>Add a slider:</span>
         {#each sheet.missing as name (name)}
-          <button onclick={() => addSlider(name)}>{@html latexMarkup(name)}</button>
+          <button onclick={() => addSlider(name)}>{@html latexMarkup(identifierLatex(name))}</button>
         {/each}
       </div>
     {/if}

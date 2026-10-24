@@ -96,6 +96,12 @@ describe('units', () => {
     expect(calc('1 kcal to J')).toBe(g('4 184') + ' J')
     expect(calc('10 knot to km/h')).toBe('18.52 km / h')
     expect(calc('1 au to km')).toBe(g('149 597 870.7') + ' km')
+    expect(calc('1 Ci to GBq')).toBe('37 GBq')
+    expect(calc('250 mrem to mSv')).toBe('2.5 mSv')
+    expect(calc('1 gauss to uT')).toBe('100 µT')
+    expect(calc('1000 mAh to C')).toBe(g('3 600') + ' C')
+    // as the converter does it (in a typed expression, min is also the min() function)
+    expect(math.unit(math.bignumber(60), 'rev/min').toNumeric('rad/s').toString()).toMatch(/^6\.283185307/)
   })
 })
 

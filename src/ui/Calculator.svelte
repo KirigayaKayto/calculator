@@ -4,7 +4,7 @@
   import { calculate, calculateLatex, format, newScope, type CalcResult } from '../engine/calc'
   import { toFraction, fractionLatex, fractionPlain, prefersFraction } from '../engine/exact'
   import { math } from '../engine/math'
-  import { balanceParens } from '../engine/latex'
+  import { balanceParens, identifierLatex } from '../engine/latex'
   import { CONSTANT_MACROS, constantsAsSymbols } from '../engine/constants'
   import { askCas, warmUpCas, cas } from '../cas/client.svelte'
   import type { CasAnswer, CasValue } from '../cas/protocol'
@@ -184,7 +184,7 @@
 
   function solutionsLatex(s: { variable: string; items: CasValue[]; showExact: boolean }) {
     if (!s.items.length) return '\\text{No solution}'
-    const v = s.variable
+    const v = identifierLatex(s.variable)
     return s.items
       .map((r) =>
         !s.showExact && r.approx !== null
@@ -453,9 +453,9 @@
 
   // ---- keys ----
 
-  const NO_RETURN = new Set(['inv', 'angle', 'left', 'right'])
+  const NO_RETURN = new Set(['inv', 'shift', 'angle', 'left', 'right'])
 
-  function onkey(key: Key, page: string) {
+  function onkey(key: Key, page: string, sticky: boolean) {
     haptic()
     if (!mf) return
     focusField()
@@ -465,6 +465,7 @@
       case 'equals':
         return equals()
       case 'inv':
+      case 'shift':
         inv = !inv
         return
       case 'angle':
@@ -493,8 +494,8 @@
         else if (key.latex) insert(key.latex, key.continues)
         inv = false
     }
-    // on a phone, a function page closes after use, like a menu
-    if (page !== 'main' && !sideBySide && settings.autoReturn && !NO_RETURN.has(key.id)) ui.page = 'main'
+    // on a phone, a function page closes after use, like a menu (letter pages stay open)
+    if (page !== 'main' && !sticky && !sideBySide && settings.autoReturn && !NO_RETURN.has(key.id)) ui.page = 'main'
     sync()
   }
 
@@ -632,7 +633,7 @@
           <span class="label">Solve for</span>
           {#each chooseVars ?? preview?.choose ?? [] as v (v)}
             <button class="var" onmousedown={(e) => e.preventDefault()} onclick={() => equals(v)}>
-              {@html latexMarkup(v)}
+              {@html latexMarkup(identifierLatex(v))}
             </button>
           {/each}
         {:else if preview?.working}

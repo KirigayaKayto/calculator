@@ -15,19 +15,29 @@ export interface Key {
   latex?: string
   /** After "=", the key continues from the answer instead of starting anew. */
   continues?: boolean
-  /** What the key does while INV is on. */
+  /** What the key does while INV (or ⇧ on the letter pages) is on. */
   inv?: Omit<Key, 'id' | 'inv'>
+  /** The key opens another page instead of typing (abc ⇄ αβγ). */
+  page?: string
 }
 
 export interface Page {
   id: string
   label: string
-  /** Key ids, row by row, 5 per row; "" is an empty slot. */
+  /** Key ids, row by row; "" is an empty slot. 5 rows of `cols` keys. */
   keys: string[]
+  /** Keys per row: 5 unless the page says otherwise (the letters have 7). */
+  cols?: number
+  /** Not in the page tabs: reached with a key (the Greek letters, from abc). */
+  hidden?: boolean
+  /** Stays open after a key on a phone: letters are typed one after another. */
+  sticky?: boolean
 }
 
-/** Slots on a page: 5 × 5. */
+/** Slots on a page of 5 × 5; letter pages have 7 × 5. */
 export const PAGE_SIZE = 25
+export const ROWS = 5
+export const pageSize = (p: Page) => (p.cols ?? 5) * ROWS
 
 const BOX = '\\square'
 
@@ -45,10 +55,10 @@ const fn = (id: string, name: string, aria: string, inverse?: string): Key => ({
 })
 
 /**
- * Every key by id. Keys that only act (clear, back, equals, paren, decimal, left, right,
- * inv, angle) are handled by the calculator; the rest insert `typed` or `latex`.
+ * Every key, and below by id. Keys that only act (clear, back, equals, paren, decimal, left, right,
+ * inv, shift, angle) are handled by the calculator; the rest insert `typed` or `latex`.
  */
-export const KEYS: Record<string, Key> = Object.fromEntries(
+export const KEY_LIST: Key[] = (
   [
     ...'0123456789'.split('').map(digit),
     { id: 'decimal', kind: 'num', label: '.', aria: 'Decimal point' },
@@ -190,8 +200,39 @@ export const KEYS: Record<string, Key> = Object.fromEntries(
       aria,
     })),
     { id: 'convert', kind: 'sci', labelLatex: '\\to', latex: '\\to', aria: 'Convert to the unit', continues: true },
-  ].map((k) => [k.id, k as Key]),
+    // letters: ⇧ (the INV switch) gives capitals
+    ...'abcdefghijklmnopqrstuvwxyz'.split('').map((c) => ({
+      id: `letter-${c}`,
+      kind: 'num',
+      labelLatex: c,
+      typed: c,
+      aria: c,
+      inv: { kind: 'num', labelLatex: c.toUpperCase(), typed: c.toUpperCase(), aria: `Capital ${c.toUpperCase()}` },
+    })),
+    ...(
+      [
+        ['alpha'], ['beta'], ['gamma', 'Gamma'], ['delta', 'Delta'], ['epsilon'], ['zeta'], ['eta'],
+        ['theta', 'Theta'], ['iota'], ['kappa'], ['lambda', 'Lambda'], ['mu'], ['nu'], ['xi', 'Xi'],
+        ['pi', 'Pi'], ['rho'], ['sigma', 'Sigma'], ['tau'], ['upsilon', 'Upsilon'], ['phi', 'Phi'], ['chi'],
+        ['psi', 'Psi'], ['omega', 'Omega'], ['varepsilon'], ['vartheta'], ['varphi'],
+      ] as [string, string?][]
+    ).map(([name, capital]) => ({
+      id: `greek-${name}`,
+      kind: 'num',
+      labelLatex: `\\${name}`,
+      latex: `\\${name}`,
+      aria: name,
+      inv: capital ? { kind: 'num', labelLatex: `\\${capital}`, latex: `\\${capital}`, aria: `Capital ${name}` } : undefined,
+    })),
+    { id: 'shift', kind: 'sci', label: '⇧', aria: 'Capital letters' },
+    { id: 'toGreek', kind: 'sci', labelLatex: '\\alpha\\beta\\gamma', aria: 'Greek letters', page: 'greek' },
+    { id: 'toLatin', kind: 'sci', label: 'abc', aria: 'Latin letters', page: 'abc' },
+    { id: 'subscript', kind: 'sci', labelLatex: `${BOX}_{${BOX}}`, latex: '#@_{#?}', aria: 'Subscript, as in v₀', continues: true },
+    { id: 'prime', kind: 'sci', labelLatex: "f'", typed: "'", aria: 'Prime, as in f′(x)', continues: true },
+  ] as Key[]
 )
+
+export const KEYS: Record<string, Key> = Object.fromEntries(KEY_LIST.map((k) => [k.id, k]))
 
 /**
  * A key made by the person: a label (text, or the formula itself) and a formula to insert,
@@ -258,6 +299,32 @@ export const PAGES: Page[] = [
       'unit-kg', 'unit-g', 'unit-N', 'unit-J', 'unit-W',
       'unit-Pa', 'unit-V', 'unit-A', 'unit-ohm', 'unit-C',
       'unit-K', 'unit-degC', 'unit-eV', 'unit-mol', 'convert',
+    ],
+  },
+  {
+    id: 'abc',
+    label: 'abc',
+    cols: 7,
+    sticky: true,
+    keys: [
+      ...'abcdefghijklmnopqrstuvwxyz'.split('').map((c) => `letter-${c}`),
+      'shift', 'toGreek',
+      'subscript', 'prime', 'comma', 'eqsign', 'open', 'close', 'back',
+    ],
+  },
+  {
+    id: 'greek',
+    label: 'αβγ',
+    cols: 7,
+    hidden: true,
+    sticky: true,
+    keys: [
+      ...['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta'].map((g) => `greek-${g}`),
+      ...['theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi'].map((g) => `greek-${g}`),
+      ...['pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi'].map((g) => `greek-${g}`),
+      ...['psi', 'omega', 'varepsilon', 'vartheta', 'varphi'].map((g) => `greek-${g}`),
+      'shift', 'toLatin',
+      'subscript', 'prime', 'comma', 'eqsign', 'open', 'close', 'back',
     ],
   },
 ]

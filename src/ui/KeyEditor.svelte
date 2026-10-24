@@ -6,8 +6,8 @@
   import Keypad from './Keypad.svelte'
   import { applyKey } from './applyKey'
   import { latexMarkup } from '../lib/markup'
-  import { KEYS, PAGES, PAGE_SIZE, customKey, type Key, type Page } from './keys'
-  import { keyLayout, newId, showToast, settings, haptic, type CustomKeyData } from '../lib/state.svelte'
+  import { KEYS, PAGES, PAGE_SIZE, customKey, pageSize, type Key, type Page } from './keys'
+  import { keyLayout, addNewPages, newId, showToast, settings, haptic, type CustomKeyData } from '../lib/state.svelte'
 
   let { onclose }: { onclose: () => void } = $props()
 
@@ -50,7 +50,10 @@
 
   /** The first change copies the default layout; from then on the person's own is used. */
   function editable(): Page[] {
-    keyLayout.pages ??= JSON.parse(JSON.stringify(PAGES)) as Page[]
+    if (!keyLayout.pages) {
+      keyLayout.pages = JSON.parse(JSON.stringify(PAGES)) as Page[]
+      keyLayout.known = PAGES.map((p) => p.id)
+    }
     return keyLayout.pages
   }
   const editedPage = () => editable().find((p) => p.id === page.id)!
@@ -119,15 +122,16 @@
     }
   }
 
-  function isLayout(x: unknown): x is { pages: Page[] | null; custom: CustomKeyData[] } {
-    const d = x as { pages: unknown; custom: unknown }
-    const pageOk = (p: Page) => typeof p.id === 'string' && typeof p.label === 'string' && Array.isArray(p.keys) && p.keys.length === PAGE_SIZE
+  function isLayout(x: unknown): x is { pages: Page[] | null; custom: CustomKeyData[]; known?: string[] } {
+    const d = x as { pages: unknown; custom: unknown; known?: unknown }
+    const pageOk = (p: Page) => typeof p.id === 'string' && typeof p.label === 'string' && Array.isArray(p.keys) && p.keys.length === pageSize(p)
     const keyOk = (c: CustomKeyData) => typeof c.id === 'string' && typeof c.label === 'string' && typeof c.formula === 'string'
     return (
       !!d &&
       (d.pages === null || (Array.isArray(d.pages) && d.pages.every(pageOk) && d.pages.some((p: Page) => p.id === 'main'))) &&
       Array.isArray(d.custom) &&
-      d.custom.every(keyOk)
+      d.custom.every(keyOk) &&
+      (d.known === undefined || (Array.isArray(d.known) && d.known.every((id) => typeof id === 'string')))
     )
   }
 
@@ -137,6 +141,8 @@
       if (!isLayout(data)) throw new Error()
       keyLayout.pages = data.pages
       keyLayout.custom = data.custom
+      keyLayout.known = data.known
+      addNewPages()
       pageId = 'main'
       slot = null
       showToast('Layout pasted')
@@ -194,7 +200,7 @@
       </div>
     {/if}
 
-    <div class="grid" role="grid" aria-label="Keys of the page">
+    <div class="grid" role="grid" aria-label="Keys of the page" style:--cols={page.cols ?? 5}>
       {#each page.keys as id, i (i)}
         <button
           class="slot"
@@ -412,7 +418,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(var(--cols, 5), 1fr);
     grid-auto-rows: 52px;
     gap: 6px;
   }

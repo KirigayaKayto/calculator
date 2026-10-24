@@ -5,7 +5,7 @@ import type { DecimalMark } from '../engine/input'
 /**
  * A key of the app's keypad pressed while a formula field (a graph line, a key being made)
  * has the focus. The calculator has its own handling (=, Ans, history); this is the rest.
- * Returns 'inv' when the key toggles INV, which the keypad shows.
+ * Returns 'inv' when the key toggles INV (⇧ on the letter pages), which the keypad shows.
  */
 export function applyKey(f: MathfieldElement, key: Key, decimal: DecimalMark): 'inv' | void {
   f.focus()
@@ -33,6 +33,7 @@ export function applyKey(f: MathfieldElement, key: Key, decimal: DecimalMark): '
       f.executeCommand(['typedText', decimal])
       return
     case 'inv':
+    case 'shift':
       return 'inv'
     case 'angle':
     case 'ans':
