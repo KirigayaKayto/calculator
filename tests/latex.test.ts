@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { latexToExpr } from '../src/engine/latex'
+import { latexToExpr, balanceParens } from '../src/engine/latex'
 import { calculateLatex, type CalcSettings } from '../src/engine/calc'
 import { toFraction, fractionLatex, fractionPlain, prefersFraction } from '../src/engine/exact'
 
@@ -52,6 +52,17 @@ describe('latex to expression', () => {
     expect(latexToExpr('\\operatorname{nPr}\\left(5,2\\right)')).toBe('permutations(5,2)')
     expect(latexToExpr('\\lfloor2.7\\rfloor')).toBe('floor(2.7)')
     expect(latexToExpr('\\left\\lceil2.1\\right\\rceil')).toBe('ceil(2.1)')
+  })
+})
+
+describe('balancing parentheses', () => {
+  it('closes them where they belong', () => {
+    expect(balanceParens('\\sin(x^2')).toBe('\\sin(x^2)')
+    expect(balanceParens('\\frac{d}{dx}\\left(\\sin(x^2\\right)')).toBe('\\frac{d}{dx}\\left(\\sin(x^2)\\right)')
+    expect(balanceParens('\\int x\\cdot\\cos(x\\,dx')).toBe('\\int x\\cdot\\cos(x)\\,dx')
+    expect(balanceParens('\\frac{(1+2}{3}')).toBe('\\frac{(1+2)}{3}')
+    expect(balanceParens('(1+2)\\cdot3')).toBe('(1+2)\\cdot3')
+    expect(balanceParens('\\left\\{x\\right\\}')).toBe('\\left\\{x\\right\\}')
   })
 })
 

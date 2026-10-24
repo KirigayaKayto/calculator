@@ -399,6 +399,49 @@ class Parser {
   }
 }
 
+/**
+ * Close parentheses the person left open, where they belong: at the end of their group
+ * (a fraction's numerator, a \left…\right pair) and before the "dx" of an integral.
+ * "\sin(x^2" → "\sin(x^2)", "\int\cos(x\,dx" → "\int\cos(x)\,dx".
+ */
+export function balanceParens(latex: string): string {
+  let out = ''
+  const open = [0] // unclosed "(" in each nested group
+  const closeGroup = () => {
+    out += ')'.repeat(open[open.length - 1])
+    open[open.length - 1] = 0
+  }
+  let i = 0
+  while (i < latex.length) {
+    const rest = latex.slice(i)
+    let m: RegExpExecArray | null
+    if ((m = /^\\left(?:\\[a-zA-Z]+|\\.|.)/.exec(rest))) {
+      open.push(0)
+    } else if ((m = /^\\right(?:\\[a-zA-Z]+|\\.|.)/.exec(rest))) {
+      closeGroup()
+      if (open.length > 1) open.pop()
+    } else if ((m = /^\\,\s*d(?=[a-zA-Z](?![a-zA-Z]))/.exec(rest)) && out.includes('\\int')) {
+      closeGroup() // the differential ends the integrand
+    } else if ((m = /^\\[a-zA-Z]+|^\\./.exec(rest))) {
+      // a command, or an escaped \{ \}
+    } else {
+      const c = latex[i]
+      if (c === '{') open.push(0)
+      else if (c === '}') {
+        closeGroup()
+        if (open.length > 1) open.pop()
+      } else if (c === '(') open[open.length - 1]++
+      else if (c === ')' && open[open.length - 1] > 0) open[open.length - 1]--
+      out += c
+      i++
+      continue
+    }
+    out += m[0]
+    i += m[0].length
+  }
+  return out + ')'.repeat(open.reduce((a, b) => a + b, 0))
+}
+
 /** Convert LaTeX from the textbook-style field into a mathjs expression. */
 export function latexToExpr(latex: string, options: LatexOptions = {}): string {
   return new Parser(tokenize(latex), options).parse().replace(/\s+/g, ' ').trim()

@@ -17,6 +17,8 @@ export interface Settings {
   formatDigits: Record<FormatMode, number>
   /** 2½ means 2 + ½ in input and answers; off by default, as at university. */
   mixedNumbers: boolean
+  /** Show √2/2 and π/3 rather than 0.7071… when the answer has an exact form. */
+  exactAnswers: boolean
   /** After a key on a function page, go back to the 123 page (phones). */
   autoReturn: boolean
   haptics: boolean
@@ -31,6 +33,7 @@ const DEFAULT_SETTINGS: Settings = {
   format: 'auto',
   formatDigits: DEFAULT_DIGITS,
   mixedNumbers: false,
+  exactAnswers: true,
   autoReturn: true,
   haptics: true,
 }
@@ -76,10 +79,22 @@ export interface HistoryEntry {
   /** The answer as a decimal: shown and plain (for copying and inserting). */
   text: string
   plain: string
-  /** The answer as a fraction, when there is one, and whether it was shown that way. */
+  /** The exact answer (a fraction, √2/2, 2x·cos x², x = 3, x = 2…) and whether it was shown. */
+  exact?: string
+  showExact?: boolean
+  /** The answer is the solutions of an equation ("x = 3, x = 2"), not a value. */
+  solved?: boolean
+  /** Fraction answers from the first version, before `exact`. */
   fraction?: string
   showFraction?: boolean
   at: number
+}
+
+/** The answer of a history entry as it was shown: exact LaTeX, or null for the decimal. */
+export function shownExact(e: HistoryEntry): string | null {
+  const exact = e.exact ?? e.fraction
+  if (!exact) return null
+  return (e.showExact ?? e.showFraction) || !e.plain ? exact : null
 }
 
 const HISTORY_LIMIT = 300

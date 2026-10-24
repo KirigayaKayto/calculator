@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import Icon from './Icon.svelte'
-  import { history, settings, type HistoryEntry } from '../lib/state.svelte'
+  import { history, settings, shownExact, type HistoryEntry } from '../lib/state.svelte'
   import { latexMarkup, numberLatex } from '../lib/markup'
 
   interface Props {
@@ -75,7 +75,7 @@
         </button>
         <button class="result" title="Insert this answer" onclick={() => onpick(item, 'result')}>
           {@html latexMarkup(
-            '=' + (item.showFraction && item.fraction ? item.fraction : numberLatex(item.plain, settings.decimal, true)),
+            (item.solved ? '' : '=') + (shownExact(item) ?? numberLatex(item.plain, settings.decimal, true)),
           )}
         </button>
       </li>

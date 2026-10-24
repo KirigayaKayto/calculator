@@ -71,6 +71,17 @@
     <p class="hint">The chip next to the answer changes the format and the number of digits.</p>
 
     <Segmented
+      label="Exact answers"
+      name="exact"
+      bind:value={settings.exactAnswers}
+      options={[
+        { value: true, label: '√2⁄2, π⁄3' },
+        { value: false, label: '0.7071…' },
+      ]}
+    />
+    <p class="hint">⇄ next to the answer always switches between the exact form and the decimal.</p>
+
+    <Segmented
       label="Decimal mark"
       name="decimal"
       bind:value={settings.decimal}

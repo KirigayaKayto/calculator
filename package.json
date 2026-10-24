@@ -11,6 +11,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "@cortex-js/compute-engine": "^0.162.0",
     "mathjs": "^15.2.0",
     "mathlive": "^0.111.1"
   },
