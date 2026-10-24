@@ -3,6 +3,7 @@
  * Only what the calculator can produce or a person can type is supported.
  */
 import { CalcError, IncompleteError } from './errors'
+import { CONSTANT_BY_ID, constantVar } from './constants'
 
 export interface LatexOptions {
   /** 2½ means 2 + ½ (school); by default a number before a fraction multiplies it (university). */
@@ -46,9 +47,12 @@ function tokenize(src: string): Token[] {
         while (src[i] === ' ') i++
         if (src[i] === '{') {
           const [content, end] = readGroup(src, i)
-          // MathLive nests styles: \operatorname{\mathrm{nCr}}
+          // MathLive nests styles: \operatorname{\mathrm{nCr}}; units use Ω and µ: \mathrm{k\Omega}, \mathrm{\mu m}
           const plain = content
             .replace(/\\(?:mathrm|mathit|text|textrm|textit|mbox|operatorname)\s*\{([^{}]*)\}/g, '$1')
+            .replace(/\\Omega\s*/g, 'ohm')
+            .replace(/\\mu\s*/g, 'u')
+            .replace(/\\degree\s*/g, '°')
             .replace(/\\[,;:! ]/g, ' ')
           out.push({ t: kind, v: plain })
           i = end
@@ -98,6 +102,11 @@ const FUNCTIONS: Record<string, string> = {
   lcm: 'lcm',
   sign: 'sign',
   sgn: 'sign',
+  det: 'det',
+  dot: 'dot',
+  cross: 'cross',
+  norm: 'norm',
+  tr: 'trace',
 }
 
 /** sin⁻¹ x is arcsin x, not 1/sin x. */
@@ -126,6 +135,11 @@ const SYMBOLS: Record<string, string> = {
   '%': '%',
   bmod: ' mod ',
   mod: ' mod ',
+  // unit conversion: 5 km → m
+  to: ' to ',
+  rightarrow: ' to ',
+  // a measurement with its uncertainty, 2.50 ± 0.02; see uncertainty.ts
+  pm: ' ± ',
   ',': ' ',
   ';': ' ',
   ':': ' ',
@@ -190,7 +204,15 @@ class Parser {
   private seq(stop?: (t: Token) => boolean): string {
     let out = ''
     while (this.i < this.toks.length) {
-      if (stop?.(this.toks[this.i])) break
+      const tok = this.toks[this.i]
+      if (stop?.(tok)) break
+      // r∠θ: everything before the angle sign is the length, everything after it the angle
+      if (tok.t === 'cmd' && tok.v === 'angle') {
+        this.i++
+        const theta = this.seq(stop)
+        if (!out.trim() || !theta.trim()) throw new IncompleteError()
+        return `polar(${out},${theta})`
+      }
       out = this.item(out)
     }
     return out
@@ -254,6 +276,47 @@ class Parser {
     if (open === 'lceil') return `ceil(${inner})`
     if (open === '.') return inner
     return `(${inner})`
+  }
+
+  /**
+   * \begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix} → [[1,2],[3,4]]. A single row or column is a
+   * vector [1,2,3]; vmatrix is the determinant.
+   */
+  private environment(): string {
+    const env = this.arg().trim()
+    const rows: string[][] = [[]]
+    let cell = ''
+    while (this.i < this.toks.length) {
+      const t = this.toks[this.i]
+      if (t.t === 'cmd' && t.v === 'end') {
+        this.i++
+        this.arg()
+        break
+      }
+      if (t.t === 'cmd' && t.v === '\\') {
+        this.i++
+        rows[rows.length - 1].push(cell)
+        rows.push([])
+        cell = ''
+      } else if (t.t === 'ch' && t.v === '&') {
+        this.i++
+        rows[rows.length - 1].push(cell)
+        cell = ''
+      } else {
+        cell = this.item(cell)
+      }
+    }
+    rows[rows.length - 1].push(cell)
+    const filled = rows.filter((r) => r.some((c) => c.trim()))
+    if (!filled.length || filled.some((r) => r.some((c) => !c.trim()))) throw new IncompleteError()
+    if (!/matrix$/.test(env)) throw new CalcError(`Not supported: ${env}`)
+    const matrix =
+      filled.length === 1
+        ? `[${filled[0].join(',')}]`
+        : filled.every((r) => r.length === 1)
+          ? `[${filled.map((r) => r[0]).join(',')}]`
+          : `[${filled.map((r) => `[${r.join(',')}]`).join(',')}]`
+    return env === 'vmatrix' ? `det(${matrix})` : matrix
   }
 
   /** ⌊x⌋ and ⌈x⌉ written without \left and \right. */
@@ -345,8 +408,11 @@ class Parser {
           return `${out}(${inner})`
         }
         case '^': {
-          const exponent = this.arg()
-          return exponent.trim() === 'deg' ? `${out} deg` : `${out}^(${exponent})`
+          const exponent = this.arg().trim()
+          if (exponent === 'deg') return `${out} deg`
+          // Aᵀ, the transpose
+          if (exponent === 'T') return `${out}'`
+          return `${out}^(${exponent})`
         }
         case '_':
           return `${out}_${this.arg().trim()}`
@@ -381,6 +447,8 @@ class Parser {
     }
     if (cmd === 'lfloor') return out + this.bracketed('floor', 'rfloor')
     if (cmd === 'lceil') return out + this.bracketed('ceil', 'rceil')
+    if (cmd === 'begin') return out + this.environment()
+    if (CONSTANT_BY_ID[cmd]) return `${out} ${constantVar(cmd)} `
     if (cmd === 'sqrt') {
       const n = this.optionalArg()
       const x = this.arg()

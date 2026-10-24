@@ -5,12 +5,14 @@
   import { toFraction, fractionLatex, fractionPlain, prefersFraction } from '../engine/exact'
   import { math } from '../engine/math'
   import { balanceParens } from '../engine/latex'
+  import { CONSTANT_MACROS, constantsAsSymbols } from '../engine/constants'
   import { askCas, warmUpCas, cas } from '../cas/client.svelte'
   import type { CasAnswer, CasValue } from '../cas/protocol'
   import {
     settings,
     calcSettings,
     ui,
+    pending,
     wide,
     short,
     history,
@@ -55,6 +57,8 @@
     decimal: Form | null
     exact: Form | null
     showExact: boolean
+    /** "2 s.f." in lab mode, "±1.2 %" for a measurement. */
+    note?: string
   }
   let answer = $state.raw<Answer | null>(null)
   let answerSeq = 0
@@ -112,13 +116,16 @@
     return calculateLatex(latex, cs, scope)
   }
 
-  /** What the CAS gets: parentheses closed, and the answer itself in place of Ans. */
+  /**
+   * What the CAS gets: parentheses closed, constants as their symbols (so E = mc² can be
+   * solved for m), and the answer itself in place of Ans.
+   */
   function forCas(latex: string): string {
     const ans =
       answer?.exact?.latex ??
       answer?.decimal?.latex ??
       (ansValue !== undefined ? plainToLatex(format(ansValue, cs, true)) : null)
-    const balanced = balanceParens(latex)
+    const balanced = constantsAsSymbols(balanceParens(latex))
     return ans === null
       ? balanced
       : balanced.replace(/\\(?:operatorname|mathrm)\{(?:\\mathrm\{)?Ans\}?\}/g, `\\left(${ans}\\right)`)
@@ -131,7 +138,8 @@
 
   const numeric = $derived(evaluate(ui.latex))
   const viaCas = $derived(CAS_ONLY.test(ui.latex) || (!numeric.ok && !!numeric.unknown))
-  const fraction = $derived(numeric.ok ? toFraction(numeric.value) : null)
+  // a measurement (2.50 ± 0.02) is not a fraction
+  const fraction = $derived(numeric.ok && !numeric.latex ? toFraction(numeric.value) : null)
   const previewAsFraction = $derived(!!fraction && wantsFraction(ui.latex) !== flipped)
   const showingAnswer = $derived(!!answer && ui.latex === answerLatex)
 
@@ -187,7 +195,7 @@
   }
 
   /** What to show under the formula while typing. */
-  const preview = $derived.by((): { latex?: string; working?: boolean; choose?: string[] } | null => {
+  const preview = $derived.by((): { latex?: string; working?: boolean; choose?: string[]; note?: string } | null => {
     if (showingAnswer || !ui.latex.trim()) return null
     if (viaCas) {
       if (casPreview?.latex !== ui.latex) return { working: true }
@@ -206,7 +214,8 @@
         '=' +
         (previewAsFraction && fraction
           ? fractionLatex(fraction, settings.mixedNumbers)
-          : numberLatex(numeric.plain, settings.decimal, true)),
+          : (numeric.latex ?? numberLatex(numeric.plain, settings.decimal, true))),
+      note: numeric.note,
     }
   })
 
@@ -399,13 +408,14 @@
       shake()
       return
     }
-    const f = toFraction(r.value)
+    const f = r.latex ? null : toFraction(r.value)
     const ans: Answer = {
       id: ++answerSeq,
       value: r.value,
-      decimal: { latex: plainToLatex(r.plain), plain: r.plain },
+      decimal: { latex: r.latex ?? plainToLatex(r.plain), plain: r.plain },
       exact: f ? { latex: fractionLatex(f, settings.mixedNumbers), plain: fractionPlain(f) } : null,
       showExact: !!f && wantsFraction(latex) !== flipped,
+      note: r.note,
     }
     record(latex, ans)
     answer = ans
@@ -573,12 +583,20 @@
     field.smartSuperscript = false
     field.menuItems = []
     field.placeholder = '0'
+    // physical constants: \ConstC looks like c but is not the letter c
+    field.macros = { ...field.macros, ...CONSTANT_MACROS }
     field.addEventListener('keydown', onFieldKeydown, { capture: true })
     field.addEventListener('input', sync)
     field.addEventListener('pointerdown', () => (justEvaluated = false))
     mf = field
     mf.position = mf.lastOffset
     if (ui.page === 'calc') warmUpCas()
+    // a constant chosen in Tools
+    if (pending.insert) {
+      insert(pending.insert, true)
+      pending.insert = null
+      sync()
+    }
     // on a computer, start typing right away; on a phone, nothing should pop up
     if (matchMedia('(pointer: fine)').matches) focusField()
     return () => {
@@ -621,6 +639,9 @@
           <span class="working">{cas.status === 'loading' ? 'Loading the math engine…' : 'Working…'}</span>
         {:else if preview?.latex}
           <span class="preview">{@html latexMarkup(preview.latex)}</span>
+        {/if}
+        {#if !error && (showingAnswer ? answer?.note : preview?.note)}
+          <span class="note">{showingAnswer ? answer?.note : preview?.note}</span>
         {/if}
         {#if !error && canFlip}
           <button
@@ -759,6 +780,17 @@
 
   .preview.solved {
     color: var(--text);
+  }
+
+  .note {
+    margin-right: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--key-fn);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
   }
 
   .working,

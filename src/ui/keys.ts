@@ -1,4 +1,5 @@
 import type { IconName } from './Icon.svelte'
+import { CONSTANTS } from '../engine/constants'
 
 export interface Key {
   id: string
@@ -139,6 +140,53 @@ export const KEYS: Record<string, Key> = Object.fromEntries(
     { id: 'factor', kind: 'sci', label: 'Factor', latex: '\\operatorname{Factor}\\left(#0\\right)', aria: 'Factor' },
     { id: 'expand', kind: 'sci', label: 'Expand', latex: '\\operatorname{Expand}\\left(#0\\right)', aria: 'Expand' },
     { id: 'comma', kind: 'sci', label: ',', typed: ',', aria: 'Comma' },
+    // physics
+    ...CONSTANTS.map((c) => ({ id: c.id, kind: 'sci', labelLatex: c.symbol, latex: `\\${c.id}`, aria: c.name })),
+    { id: 'pm', kind: 'sci', labelLatex: '\\pm', latex: '\\pm', aria: 'Plus or minus: a measurement and its uncertainty', continues: true },
+    {
+      id: 'vec2',
+      kind: 'sci',
+      labelLatex: `\\begin{pmatrix}${BOX}\\\\${BOX}\\end{pmatrix}`,
+      latex: '\\begin{pmatrix}#?\\\\#?\\end{pmatrix}',
+      aria: 'Vector in 2D',
+    },
+    {
+      id: 'vec3',
+      kind: 'sci',
+      labelLatex: `\\begin{pmatrix}${BOX}\\\\${BOX}\\\\${BOX}\\end{pmatrix}`,
+      latex: '\\begin{pmatrix}#?\\\\#?\\\\#?\\end{pmatrix}',
+      aria: 'Vector in 3D',
+    },
+    {
+      id: 'mat2',
+      kind: 'sci',
+      labelLatex: `\\begin{pmatrix}${BOX}&${BOX}\\\\${BOX}&${BOX}\\end{pmatrix}`,
+      latex: '\\begin{pmatrix}#?&#?\\\\#?&#?\\end{pmatrix}',
+      aria: '2 by 2 matrix',
+    },
+    { id: 'dot', kind: 'sci', labelLatex: '\\vec{u}\\cdot\\vec{v}', latex: '\\operatorname{dot}\\left(#?,#?\\right)', aria: 'Dot product' },
+    { id: 'cross', kind: 'sci', labelLatex: '\\vec{u}\\times\\vec{v}', latex: '\\operatorname{cross}\\left(#?,#?\\right)', aria: 'Cross product' },
+    { id: 'det', kind: 'sci', label: 'det', latex: '\\det\\left(#0\\right)', aria: 'Determinant' },
+    { id: 'imag', kind: 'sci', labelLatex: 'i', typed: 'i', aria: 'Imaginary unit i' },
+    { id: 'angleSign', kind: 'sci', labelLatex: `r\\angle\\theta`, latex: '\\angle', aria: 'Polar form: length, angle sign, angle' },
+    // units: upright, after a thin space, as printed in physics books
+    ...(
+      [
+        ['m', 'm', 'Metres'], ['km', 'km', 'Kilometres'], ['cm', 'cm', 'Centimetres'], ['mm', 'mm', 'Millimetres'],
+        ['um', '\\mu m', 'Micrometres'], ['s', 's', 'Seconds'], ['ms', 'ms', 'Milliseconds'], ['min', 'min', 'Minutes'],
+        ['h', 'h', 'Hours'], ['Hz', 'Hz', 'Hertz'], ['kg', 'kg', 'Kilograms'], ['g', 'g', 'Grams'], ['N', 'N', 'Newtons'],
+        ['J', 'J', 'Joules'], ['W', 'W', 'Watts'], ['Pa', 'Pa', 'Pascals'], ['V', 'V', 'Volts'], ['A', 'A', 'Amperes'],
+        ['ohm', '\\Omega', 'Ohms'], ['C', 'C', 'Coulombs'], ['K', 'K', 'Kelvin'], ['degC', '°C', 'Degrees Celsius'],
+        ['eV', 'eV', 'Electronvolts'], ['mol', 'mol', 'Moles'],
+      ] as const
+    ).map(([id, tex, aria]) => ({
+      id: `unit-${id}`,
+      kind: 'sci',
+      labelLatex: `\\mathrm{${tex}}`,
+      latex: `\\,\\mathrm{${tex}}`,
+      aria,
+    })),
+    { id: 'convert', kind: 'sci', labelLatex: '\\to', latex: '\\to', aria: 'Convert to the unit', continues: true },
   ].map((k) => [k.id, k as Key]),
 )
 
@@ -174,6 +222,28 @@ export const PAGES: Page[] = [
       'x', 'y', 't', 'n', 'infty',
       'factor', 'expand', 'comma', 'open', 'close',
       'pi', 'e', 'sqrt', 'pow', 'frac',
+    ],
+  },
+  {
+    id: 'phys',
+    label: 'Phys',
+    keys: [
+      'ConstC', 'ConstG', 'ConstH', 'ConstHbar', 'ConstE',
+      'ConstKB', 'ConstNA', 'ConstR', 'ConstEps', 'ConstMu',
+      'ConstMe', 'ConstMp', 'ConstGn', 'ConstKe', 'pm',
+      'vec2', 'vec3', 'mat2', 'abs', 'det',
+      'dot', 'cross', 'imag', 'angleSign', 'comma',
+    ],
+  },
+  {
+    id: 'units',
+    label: 'Units',
+    keys: [
+      'unit-m', 'unit-km', 'unit-cm', 'unit-mm', 'unit-um',
+      'unit-s', 'unit-ms', 'unit-min', 'unit-h', 'unit-Hz',
+      'unit-kg', 'unit-g', 'unit-N', 'unit-J', 'unit-W',
+      'unit-Pa', 'unit-V', 'unit-A', 'unit-ohm', 'unit-C',
+      'unit-K', 'unit-degC', 'unit-eV', 'unit-mol', 'convert',
     ],
   },
 ]

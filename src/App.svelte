@@ -1,7 +1,7 @@
 <script lang="ts">
   import Calculator from './ui/Calculator.svelte'
   import Notebook from './ui/Notebook.svelte'
-  import Converter from './ui/Converter.svelte'
+  import Tools from './ui/Tools.svelte'
   import Settings from './ui/Settings.svelte'
   import Icon from './ui/Icon.svelte'
   import { ui, settings, prefersDark, toast, type Tab } from './lib/state.svelte'
@@ -9,7 +9,7 @@
   const TABS: { id: Tab; label: string }[] = [
     { id: 'calc', label: 'Calculator' },
     { id: 'notes', label: 'Notes' },
-    { id: 'units', label: 'Units' },
+    { id: 'units', label: 'Tools' },
   ]
 
   let settingsOpen = $state(false)
@@ -63,7 +63,7 @@
       {:else if ui.tab === 'notes'}
         <Notebook />
       {:else}
-        <Converter />
+        <Tools />
       {/if}
     </div>
   </main>

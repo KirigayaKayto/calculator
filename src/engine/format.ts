@@ -6,9 +6,10 @@ import type { DecimalMark } from './input'
 /**
  * auto — up to `digits` significant digits, scientific only for huge or tiny numbers;
  * fix — `digits` decimal places; sci — scientific with `digits` significant figures;
- * eng — like sci but the exponent is a multiple of 3; sig — `digits` significant figures.
+ * eng — like sci but the exponent is a multiple of 3; sig — `digits` significant figures;
+ * lab — significant figures by the lab rules (see lab.ts), written like sig.
  */
-export type FormatMode = 'auto' | 'fix' | 'sci' | 'eng' | 'sig'
+export type FormatMode = 'auto' | 'fix' | 'sci' | 'eng' | 'sig' | 'lab'
 
 export interface FormatOptions {
   decimal: DecimalMark
@@ -16,6 +17,9 @@ export interface FormatOptions {
   mode?: FormatMode
   /** For copying and inserting back: no digit grouping, ASCII minus, "e" exponent. */
   plain?: boolean
+  /** Complex answers as a + bi or r∠θ (θ in `angle`). */
+  complex?: 'rect' | 'polar'
+  angle?: 'deg' | 'rad'
 }
 
 const GROUP = ' ' // narrow no-break space, "1 000 000"
@@ -135,8 +139,26 @@ export function formatValue(v: unknown, opts: FormatOptions): string {
     const items = (math.isMatrix(v) ? v.toArray() : v) as unknown[]
     return '[' + items.map((i) => formatValue(i, opts)).join(', ') + ']'
   }
-  if (math.isComplex(v) || math.isFraction(v)) {
-    return math.format(v, { precision: opts.digits }).replace(/\./g, opts.decimal)
-  }
+  if (math.isComplex(v)) return formatComplex(v as unknown as { re: number; im: number }, opts)
+  if (math.isFraction(v)) return math.format(v, { precision: opts.digits }).replace(/\./g, opts.decimal)
   return String(v)
+}
+
+/** 3 + 4i, or 5∠53.13° in polar form. Rounding noise (1e-16 i) is dropped. */
+function formatComplex(z: { re: number; im: number }, opts: FormatOptions): string {
+  const size = Math.hypot(z.re, z.im)
+  const clean = (x: number) => (Math.abs(x) < size * 1e-14 ? 0 : x)
+  const re = clean(z.re)
+  const im = clean(z.im)
+  const num = (x: number) => formatBig(math.bignumber(x), opts)
+  if (opts.complex === 'polar') {
+    const deg = opts.angle !== 'rad'
+    const theta = Math.atan2(im, re) * (deg ? 180 / Math.PI : 1)
+    return `${num(size)}∠${num(theta)}${deg ? '°' : ''}`
+  }
+  if (im === 0) return num(re)
+  const minus = opts.plain ? '-' : '−'
+  const imPart = Math.abs(im) === 1 ? 'i' : `${num(Math.abs(im))}i`
+  if (re === 0) return (im < 0 ? minus : '') + imPart
+  return opts.plain ? `${num(re)}${im < 0 ? '-' : '+'}${imPart}` : `${num(re)} ${im < 0 ? minus : '+'} ${imPart}`
 }

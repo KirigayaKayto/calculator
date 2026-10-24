@@ -106,6 +106,45 @@ describe('textbook calculator', () => {
   })
   it('keeps units working', () => {
     expect(calc('5\\text{ km to m}')).toBe('5\u202F000 m')
+    expect(calc('5\\,\\mathrm{km}\\to\\mathrm{m}')).toBe('5\u202F000 m')
+    expect(calc('2\\,\\mathrm{k\\Omega}\\times3\\,\\mathrm{mA}\\to\\mathrm{V}')).toBe('6 V')
+    expect(calc('500\\,\\mathrm{\\mu m}\\to\\mathrm{mm}')).toBe('0.5 mm')
+  })
+})
+
+describe('complex numbers', () => {
+  const on = (latex: string, complex: 'rect' | 'polar' = 'rect') => calc(latex, { complex })
+  it('are an error unless turned on', () => {
+    expect(calc('\\sqrt{-4}')).toBe('ERR: Undefined')
+    expect(on('\\sqrt{-4}')).toBe('2i')
+    expect(calc('\\sqrt{-4}')).toBe('ERR: Undefined')
+  })
+  it('compute in rectangular and polar form', () => {
+    expect(on('\\left(1+2i\\right)\\left(3-i\\right)')).toBe('5 + 5i')
+    expect(on('3+4i', 'polar')).toBe('5∠53.13010235415598°')
+    expect(on('2\\angle90^{\\circ}')).toBe('2i')
+    expect(on('2\\angle90')).toBe('2i')
+    expect(on('\\frac{1}{i}')).toBe('−i')
+  })
+})
+
+describe('physics', () => {
+  it('uses constants with their units', () => {
+    expect(calc('\\ConstC')).toBe('299\u202F792\u202F458 m / s')
+    expect(calc('\\ConstMe\\cdot\\ConstC^2\\to\\mathrm{MeV}', { format: 'sig', digits: 6 })).toBe('0.510999 MeV')
+    expect(calc('\\ConstH\\cdot\\ConstC\\div\\left(500\\,\\mathrm{nm}\\right)\\to\\mathrm{eV}', { format: 'sig', digits: 4 })).toBe(
+      '2.480 eV',
+    )
+  })
+  it('works with vectors and matrices', () => {
+    expect(calc('\\left|\\begin{pmatrix}3\\\\4\\end{pmatrix}\\right|')).toBe('5')
+    expect(calc('\\operatorname{dot}\\left(\\begin{pmatrix}1\\\\2\\\\3\\end{pmatrix},\\begin{pmatrix}4\\\\5\\\\6\\end{pmatrix}\\right)')).toBe('32')
+    expect(calc('\\operatorname{cross}\\left(\\begin{pmatrix}1\\\\0\\\\0\\end{pmatrix},\\begin{pmatrix}0\\\\1\\\\0\\end{pmatrix}\\right)')).toBe(
+      '[0, 0, 1]',
+    )
+    expect(calc('\\det\\left(\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}\\right)')).toBe('\u22122')
+    expect(calc('\\begin{vmatrix}1&2\\\\3&4\\end{vmatrix}')).toBe('\u22122')
+    expect(calc('\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}^{T}')).toBe('[[1, 3], [2, 4]]')
   })
 })
 

@@ -19,12 +19,14 @@ export interface Settings {
   mixedNumbers: boolean
   /** Show √2/2 and π/3 rather than 0.7071… when the answer has an exact form. */
   exactAnswers: boolean
+  /** Off: √−1 is an error. Otherwise complex answers as a + bi or r∠θ. */
+  complex: 'off' | 'rect' | 'polar'
   /** After a key on a function page, go back to the 123 page (phones). */
   autoReturn: boolean
   haptics: boolean
 }
 
-export const DEFAULT_DIGITS: Record<FormatMode, number> = { auto: 12, fix: 2, sci: 4, eng: 4, sig: 3 }
+export const DEFAULT_DIGITS: Record<FormatMode, number> = { auto: 12, fix: 2, sci: 4, eng: 4, sig: 3, lab: 12 }
 
 const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
@@ -34,6 +36,7 @@ const DEFAULT_SETTINGS: Settings = {
   formatDigits: DEFAULT_DIGITS,
   mixedNumbers: false,
   exactAnswers: true,
+  complex: 'off',
   autoReturn: true,
   haptics: true,
 }
@@ -54,6 +57,7 @@ export function calcSettings(s: Settings = settings): CalcSettings {
     format: s.format,
     digits: s.formatDigits[s.format],
     mixedNumbers: s.mixedNumbers,
+    complex: s.complex,
   }
 }
 
@@ -64,6 +68,9 @@ export const ui = $state<{ tab: Tab; latex: string; page: string }>({
   page: 'main',
   ...load('ui-v2', {}),
 })
+
+/** Something another screen asked the calculator to insert (a constant from Tools). Not saved. */
+export const pending = $state<{ insert: string | null }>({ insert: null })
 
 export const wide = new MediaQuery('min-width: 840px')
 /** A phone on its side: keys go side by side and shrink to fit the height. */
@@ -143,6 +150,8 @@ export const notebook = $state<{ sheets: Sheet[]; current: string }>(load('notes
 // ---- unit converter ----
 
 export const converter = $state<{
+  /** Which tool the Tools tab shows. */
+  tool?: 'units' | 'constants'
   category: string
   amount: string
   side: 'a' | 'b'

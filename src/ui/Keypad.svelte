@@ -127,7 +127,7 @@
     flex: none;
     display: grid;
     place-items: center;
-    width: 52px;
+    width: 44px;
     height: 40px;
     border-radius: 12px;
     color: var(--text);
@@ -142,18 +142,24 @@
     flex: 1;
     display: flex;
     justify-content: center;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
   }
 
+  /* up to five pages share the bar evenly, even on a small phone */
   .tabs button {
-    min-width: 64px;
+    flex: 1 1 0;
+    max-width: 96px;
+    min-width: 0;
     min-height: 40px;
-    padding: 0 14px;
+    padding: 0 4px;
     border-radius: 12px;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .tabs button[aria-selected='true'] {

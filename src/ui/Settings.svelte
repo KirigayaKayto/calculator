@@ -82,6 +82,18 @@
     <p class="hint">⇄ next to the answer always switches between the exact form and the decimal.</p>
 
     <Segmented
+      label="Complex numbers"
+      name="complex"
+      bind:value={settings.complex}
+      options={[
+        { value: 'off', label: 'Off' },
+        { value: 'rect', label: 'a + bi' },
+        { value: 'polar', label: 'r∠θ' },
+      ]}
+    />
+    <p class="hint">Off: √−1 is an error. On: i and ∠ on the Phys keys.</p>
+
+    <Segmented
       label="Decimal mark"
       name="decimal"
       bind:value={settings.decimal}

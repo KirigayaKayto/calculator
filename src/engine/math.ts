@@ -1,5 +1,6 @@
 import { create, all, type BigNumber, type MathJsInstance } from 'mathjs'
 import { CalcError } from './errors'
+import { CONSTANTS, constantVar } from './constants'
 
 export type Angle = 'deg' | 'rad'
 
@@ -96,8 +97,41 @@ export function calculatorFunctions(angle: Angle): Map<string, unknown> {
       base === undefined ? log10(x) : math.log(x as BigNumber, base as BigNumber),
     lg: log10,
     ln: (x: unknown) => math.log(x as BigNumber),
+    // |v| of a vector is its length
+    abs: (x: unknown) =>
+      math.isMatrix(x) || Array.isArray(x) ? math.norm(x as number[]) : math.abs(x as BigNumber),
+    // r∠θ, a complex number in polar form; θ in the angle unit, or with its own (30°)
+    polar: (r: unknown, theta: unknown) => {
+      const phi = math.isUnit(theta)
+        ? (theta as unknown as { toNumber(u: string): number }).toNumber('rad')
+        : Number(toRadians(theta, angle))
+      return math.multiply(Number(r), math.complex({ r: 1, phi }))
+    },
   }
-  return new Map(Object.entries(fns))
+  return new Map([...Object.entries(fns), ...constantValues()])
+}
+
+let constantsCache: [string, unknown][] | null = null
+
+let complexOn = false
+
+/**
+ * With complex numbers off, √−1 is an error, as on a school calculator; with them on,
+ * it is i. mathjs has one switch for the whole instance, so flip it only when it changes.
+ */
+export function useComplexNumbers(on: boolean) {
+  if (on === complexOn) return
+  complexOn = on
+  math.config({ predictable: !on })
+}
+
+/** Physical constants with their units, under the names the LaTeX converter gives them. */
+function constantValues(): [string, unknown][] {
+  constantsCache ??= CONSTANTS.map((c) => {
+    const value = math.bignumber(c.value)
+    return [constantVar(c.id), c.unit ? math.unit(value, c.unit) : value]
+  })
+  return constantsCache
 }
 
 /**

@@ -13,6 +13,11 @@
     { id: 'sci', label: 'Sci', hint: 'Significant figures, scientific notation' },
     { id: 'eng', label: 'Eng', hint: 'Significant figures, exponent a multiple of 3' },
     { id: 'sig', label: 'Sig', hint: 'Significant figures' },
+    {
+      id: 'lab',
+      label: 'Lab',
+      hint: 'Significant figures by the lab rules, from the numbers you typed. Whole numbers are exact; write 120. for a measured one.',
+    },
   ]
 
   const LIMITS: Record<FormatMode, [number, number]> = {
@@ -21,11 +26,16 @@
     sci: [1, 20],
     eng: [1, 20],
     sig: [1, 20],
+    lab: [12, 12],
   }
 
   const digits = $derived(settings.formatDigits[settings.format])
   const mode = $derived(MODES.find((m) => m.id === settings.format) ?? MODES[0])
-  const label = $derived(settings.format === 'auto' ? 'AUTO' : `${settings.format.toUpperCase()} ${digits}`)
+  const label = $derived(
+    settings.format === 'auto' || settings.format === 'lab'
+      ? settings.format.toUpperCase()
+      : `${settings.format.toUpperCase()} ${digits}`,
+  )
 
   function setMode(id: FormatMode) {
     settings.format = id
@@ -78,11 +88,13 @@
       </div>
       <div class="digits">
         <span class="hint">{mode.hint}</span>
-        <div class="stepper">
-          <button aria-label="Fewer digits" onmousedown={keepFocus} onclick={() => step(-1)}>−</button>
-          <output aria-live="polite">{digits}</output>
-          <button aria-label="More digits" onmousedown={keepFocus} onclick={() => step(1)}>+</button>
-        </div>
+        {#if settings.format !== 'lab'}
+          <div class="stepper">
+            <button aria-label="Fewer digits" onmousedown={keepFocus} onclick={() => step(-1)}>−</button>
+            <output aria-live="polite">{digits}</output>
+            <button aria-label="More digits" onmousedown={keepFocus} onclick={() => step(1)}>+</button>
+          </div>
+        {/if}
       </div>
     </div>
   {/if}

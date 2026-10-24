@@ -240,15 +240,11 @@
 </div>
 
 <style>
+  /* the Tools tab around it provides the padding and the scrolling */
   .converter {
-    height: 100%;
-    overflow-y: auto;
-    padding: 8px 12px 24px;
     display: flex;
     flex-direction: column;
     gap: 12px;
-    max-width: 720px;
-    margin: 0 auto;
   }
 
   .categories {
