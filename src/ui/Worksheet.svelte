@@ -10,6 +10,7 @@
   import MathLine from './MathLine.svelte'
   import Keypad from './Keypad.svelte'
   import type { Key } from './keys'
+  import { applyKey } from './applyKey'
   import Icon from './Icon.svelte'
 
   const sheet = $derived(evaluateWorksheet(graph.lines))
@@ -95,41 +96,11 @@
     haptic()
     const f = field
     if (!f) return
-    f.focus()
-    switch (key.id) {
-      case 'clear':
-        f.value = ''
-        break
-      case 'back':
-        f.executeCommand('deleteBackward')
-        break
-      case 'left':
-        f.executeCommand('moveToPreviousChar')
-        break
-      case 'right':
-        f.executeCommand('moveToNextChar')
-        break
-      case 'equals':
-        // in the graph, "=" writes an equation: y = …, a = …
-        f.executeCommand(['typedText', '='])
-        break
-      case 'paren':
-        f.executeCommand(['typedText', '('])
-        break
-      case 'decimal':
-        f.executeCommand(['typedText', settings.decimal])
-        break
-      case 'inv':
-        inv = !inv
-        return
-      case 'angle':
-      case 'ans':
-        return
-      default:
-        if (key.typed) f.executeCommand(['typedText', key.typed])
-        else if (key.latex) f.executeCommand(['insert', key.latex, { selectionMode: 'placeholder' }])
-        inv = false
+    if (applyKey(f, key, settings.decimal) === 'inv') {
+      inv = !inv
+      return
     }
+    if (key.kind === 'sci') inv = false
     const line = graph.lines.find((l) => l.id === editing)
     if (line) line.latex = f.value
     if (fromPage !== 'main' && !sideBySide && settings.autoReturn && !['inv', 'left', 'right'].includes(key.id)) page = 'main'

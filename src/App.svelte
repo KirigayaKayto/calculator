@@ -3,6 +3,7 @@
   import Worksheet from './ui/Worksheet.svelte'
   import Tools from './ui/Tools.svelte'
   import Settings from './ui/Settings.svelte'
+  import KeyEditor from './ui/KeyEditor.svelte'
   import Icon from './ui/Icon.svelte'
   import { ui, settings, prefersDark, toast, type Tab } from './lib/state.svelte'
 
@@ -16,6 +17,7 @@
   if (!TABS.some((t) => t.id === ui.tab)) ui.tab = 'calc'
 
   let settingsOpen = $state(false)
+  let keysOpen = $state(false)
 
   const dark = $derived(settings.theme === 'dark' || (settings.theme === 'system' && prefersDark.current))
 
@@ -72,7 +74,17 @@
   </main>
 
   {#if settingsOpen}
-    <Settings onclose={() => (settingsOpen = false)} />
+    <Settings
+      onclose={() => (settingsOpen = false)}
+      oncustomize={() => {
+        settingsOpen = false
+        keysOpen = true
+      }}
+    />
+  {/if}
+
+  {#if keysOpen}
+    <KeyEditor onclose={() => (keysOpen = false)} />
   {/if}
 
   <div class="toast" class:visible={toast.message} role="status" aria-live="polite">{toast.message}</div>

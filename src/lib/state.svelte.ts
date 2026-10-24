@@ -5,6 +5,7 @@ import type { Angle } from '../engine/math'
 import type { DecimalMark } from '../engine/input'
 import type { FormatMode } from '../engine/format'
 import type { Line } from '../graph/model'
+import type { Page } from '../ui/keys'
 import type { ViewState } from '../ui/GraphCanvas.svelte'
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -69,6 +70,22 @@ export const ui = $state<{ tab: Tab; latex: string; page: string }>({
   latex: '',
   page: 'main',
   ...load('ui-v2', {}),
+})
+
+// ---- the person's own key layout ----
+
+/** A key made in the key editor, kept as data so it survives a reload. */
+export interface CustomKeyData {
+  id: string
+  label: string
+  formula: string
+}
+
+/** `pages` is null until the person changes the layout: then the defaults apply. */
+export const keyLayout = $state<{ pages: Page[] | null; custom: CustomKeyData[] }>({
+  pages: null,
+  custom: [],
+  ...load('keys-v1', {}),
 })
 
 /** Something another screen asked the calculator to insert (a constant from Tools). Not saved. */
@@ -201,5 +218,6 @@ $effect.root(() => {
   $effect(() => save('ui-v2', $state.snapshot(ui)))
   $effect(() => save('history', $state.snapshot(history.items)))
   $effect(() => save('graph-v1', $state.snapshot(graph)))
+  $effect(() => save('keys-v1', $state.snapshot(keyLayout)))
   $effect(() => save('converter-v2', $state.snapshot(converter)))
 })

@@ -19,16 +19,30 @@
 
   let host = $state<HTMLDivElement>()
   let field: MathfieldElement | undefined
+  /** What the field itself last reported: when that comes back as `latex`, it is not a change. */
+  let reported: string | null = null
 
-  // the formula can also change from outside (a slider moving): keep the field in step
-  // (read `latex` first, so the effect follows it even before the field exists)
+  // the formula can also change from outside (a slider moving): keep the field in step, but
+  // never write back what the person is typing (read `latex` first, so the effect follows it
+  // even before the field exists)
   $effect(() => {
     const value = latex
-    if (field && field.value !== value) field.value = value
+    if (field && value !== reported && field.value !== value) {
+      field.value = value
+      reported = value
+    }
   })
 
   export function focus() {
     field?.focus()
+  }
+
+  /** Insert LaTeX at the cursor, as if typed. */
+  export function insert(tex: string) {
+    if (!field) return
+    field.executeCommand(['insert', tex, { focus: true, selectionMode: 'after' }])
+    reported = field.value
+    onchange(field.value)
   }
 
   onMount(() => {
@@ -42,7 +56,10 @@
     f.smartSuperscript = false
     f.menuItems = []
     f.macros = { ...f.macros, ...CONSTANT_MACROS }
-    f.addEventListener('input', () => onchange(f.value))
+    f.addEventListener('input', () => {
+      reported = f.value
+      onchange(f.value)
+    })
     f.addEventListener('focus', () => onfocus?.(f))
     f.addEventListener(
       'keydown',

@@ -4,7 +4,7 @@
   import Segmented from './Segmented.svelte'
   import { settings, history, install } from '../lib/state.svelte'
 
-  let { onclose }: { onclose: () => void } = $props()
+  let { onclose, oncustomize }: { onclose: () => void; oncustomize: () => void } = $props()
 
   let dialog = $state<HTMLDialogElement>()
   let historyCleared = $state(false)
@@ -140,6 +140,9 @@
     {/if}
 
     <div class="actions">
+      <button class="action" onclick={oncustomize}>
+        <Icon name="keyboard" size={18} /> Customize keys…
+      </button>
       {#if install.prompt}
         <button class="action primary" onclick={installApp}>
           <Icon name="download" size={18} /> Install on this device

@@ -1,7 +1,8 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import { latexMarkup } from '../lib/markup'
-  import { KEYS, PAGES, type Key } from './keys'
+  import { KEYS, PAGES, customKey, type Key } from './keys'
+  import { keyLayout } from '../lib/state.svelte'
   import type { DecimalMark } from '../engine/input'
   import type { Angle } from '../engine/math'
 
@@ -21,9 +22,14 @@
 
   let { onkey, onpage, page, decimal, angle, inv, wide, compact = false }: Props = $props()
 
-  /** A key as shown right now: its INV variant, the decimal mark, the angle unit. */
-  function resolve(id: string): Key {
-    const key = KEYS[id]
+  // the person's own layout (Settings → Customize keys), or the default one
+  const pages = $derived(keyLayout.pages ?? PAGES)
+  const custom = $derived(Object.fromEntries(keyLayout.custom.map((c) => [c.id, customKey(c.id, c.label, c.formula)])))
+
+  /** A key as shown right now: its INV variant, the decimal mark, the angle unit. Null for an empty slot. */
+  function resolve(id: string): Key | null {
+    const key = KEYS[id] ?? custom[id]
+    if (!key) return null
     if (inv && key.inv) return { ...key, ...key.inv }
     if (id === 'decimal') return { ...key, label: decimal, aria: decimal === ',' ? 'Decimal comma' : 'Decimal point' }
     if (id === 'angle') {
@@ -36,10 +42,11 @@
     return key
   }
 
-  const pageById = (id: string) => PAGES.find((p) => p.id === id) ?? PAGES[0]
-  const main = pageById('main')
-  const shown = $derived(wide ? pageById(page === 'main' ? 'func' : page) : pageById(page))
-  const tabs = $derived(wide ? PAGES.filter((p) => p.id !== 'main') : PAGES)
+  const pageById = (id: string) => pages.find((p) => p.id === id) ?? pages[0]
+  const main = $derived(pageById('main'))
+  const sidePages = $derived(pages.filter((p) => p.id !== 'main'))
+  const shown = $derived(wide ? (page === 'main' ? (sidePages[0] ?? main) : pageById(page)) : pageById(page))
+  const tabs = $derived(wide ? sidePages : pages)
 
   // keep the cursor in the formula: buttons must not take focus on mouse/touch
   function keepFocus(e: MouseEvent) {
@@ -49,22 +56,26 @@
 
 {#snippet button(id: string, pageId: string)}
   {@const key = resolve(id)}
-  <button
-    class="key {key.kind}"
-    class:pressed={id === 'inv' && inv}
-    aria-label={key.aria}
-    aria-pressed={id === 'inv' ? inv : undefined}
-    onmousedown={keepFocus}
-    onclick={() => onkey(key, pageId)}
-  >
-    {#if key.icon}
-      <Icon name={key.icon} size={24} />
-    {:else if key.labelLatex}
-      <span class="formula" aria-hidden="true">{@html latexMarkup(key.labelLatex)}</span>
-    {:else}
-      {key.label}
-    {/if}
-  </button>
+  {#if key}
+    <button
+      class="key {key.kind}"
+      class:pressed={id === 'inv' && inv}
+      aria-label={key.aria}
+      aria-pressed={id === 'inv' ? inv : undefined}
+      onmousedown={keepFocus}
+      onclick={() => onkey(key, pageId)}
+    >
+      {#if key.icon}
+        <Icon name={key.icon} size={24} />
+      {:else if key.labelLatex}
+        <span class="formula" aria-hidden="true">{@html latexMarkup(key.labelLatex)}</span>
+      {:else}
+        {key.label}
+      {/if}
+    </button>
+  {:else}
+    <span class="gap" aria-hidden="true"></span>
+  {/if}
 {/snippet}
 
 <div class="pad" class:wide class:compact>
@@ -91,13 +102,13 @@
 
   <div class="grids">
     <div class="grid" role="group" aria-label={shown.label}>
-      {#each shown.keys as id (id)}
+      {#each shown.keys as id, i (i)}
         {@render button(id, shown.id)}
       {/each}
     </div>
     {#if wide}
       <div class="grid" role="group" aria-label={main.label}>
-        {#each main.keys as id (id)}
+        {#each main.keys as id, i (i)}
           {@render button(id, main.id)}
         {/each}
       </div>

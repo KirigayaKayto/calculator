@@ -22,9 +22,12 @@ export interface Key {
 export interface Page {
   id: string
   label: string
-  /** Key ids, row by row, 5 per row. */
+  /** Key ids, row by row, 5 per row; "" is an empty slot. */
   keys: string[]
 }
+
+/** Slots on a page: 5 × 5. */
+export const PAGE_SIZE = 25
 
 const BOX = '\\square'
 
@@ -189,6 +192,17 @@ export const KEYS: Record<string, Key> = Object.fromEntries(
     { id: 'convert', kind: 'sci', labelLatex: '\\to', latex: '\\to', aria: 'Convert to the unit', continues: true },
   ].map((k) => [k.id, k as Key]),
 )
+
+/**
+ * A key made by the person: a label (text, or the formula itself) and a formula to insert,
+ * whose empty boxes the cursor visits in turn.
+ */
+export function customKey(id: string, label: string, formula: string): Key {
+  const latex = formula.replace(/\\placeholder\{[^}]*\}/g, '#?')
+  return label.trim()
+    ? { id, kind: 'sci', label: label.trim(), latex, aria: label.trim() }
+    : { id, kind: 'sci', labelLatex: formula.replace(/\\placeholder\{[^}]*\}/g, '\\square'), latex, aria: 'Custom key' }
+}
 
 export const PAGES: Page[] = [
   {
