@@ -224,6 +224,28 @@ export function evaluateProgrammer(text: string, radix: Radix, w: Word): bigint 
   return new Parser(tokens, w).parse()
 }
 
+/**
+ * Text pasted from elsewhere: digit groups belong together (1111 0000, DE AD BE EF, 1 234 567,
+ * 1,234,567), and × ÷ − become * / -. Operators stay apart: "5 AND 3" is unchanged.
+ */
+export function pastedProgram(text: string): string {
+  const tokens = text
+    .trim()
+    .replace(/[   '’_]/g, ' ')
+    .replace(/(?<=\d),(?=\d{3}\b)/g, '')
+    .replace(/[−–]/g, '-')
+    .replace(/[×·]/g, '*')
+    .replace(/÷/g, '/')
+    .split(/\s+/)
+  const out: string[] = []
+  for (const t of tokens) {
+    const prev = out.at(-1)
+    if (prev && /^[0-9A-Fa-f]+$/.test(prev) && /^[0-9A-Fa-f]+$/.test(t)) out[out.length - 1] = prev + t
+    else out.push(t)
+  }
+  return out.join(' ')
+}
+
 /** The bit at a position (0 = the lowest) of the word, and the word with that bit flipped. */
 export function bitAt(n: bigint, i: number, w: Word): boolean {
   return ((BigInt.asUintN(w.bits, n) >> BigInt(i)) & 1n) === 1n

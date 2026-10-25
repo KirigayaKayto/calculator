@@ -2,6 +2,9 @@
   import { onMount } from 'svelte'
   import { MathfieldElement } from 'mathlive'
   import { CONSTANT_MACROS } from '../engine/constants'
+  import { settings, showToast } from '../lib/state.svelte'
+  import FieldPaste from './FieldPaste.svelte'
+  import { pastedLatex } from './paste'
 
   interface Props {
     latex: string
@@ -19,6 +22,8 @@
 
   let host = $state<HTMLDivElement>()
   let field: MathfieldElement | undefined
+  /** The same field, for the Paste menu. */
+  let fieldEl = $state<MathfieldElement>()
   /** What the field itself last reported: when that comes back as `latex`, it is not a change. */
   let reported: string | null = null
 
@@ -43,6 +48,13 @@
     field.executeCommand(['insert', tex, { focus: true, selectionMode: 'after' }])
     reported = field.value
     onchange(field.value)
+  }
+
+  /** Text pasted from another app, cleaned up like in the calculator. */
+  function pasteText(text: string) {
+    const latex = pastedLatex(text, settings.decimal)
+    if (latex) insert(latex)
+    else showToast('No number to paste')
   }
 
   onMount(() => {
@@ -77,11 +89,16 @@
       { capture: true },
     )
     field = f
-    return () => f.remove()
+    fieldEl = f
+    return () => {
+      f.remove()
+      fieldEl = undefined
+    }
   })
 </script>
 
 <div class="line-field" bind:this={host}></div>
+<FieldPaste target={fieldEl} onpaste={pasteText} />
 
 <style>
   .line-field {

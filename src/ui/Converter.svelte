@@ -192,6 +192,7 @@
   import { math } from '../engine/math'
   import { calculate, format, translateError } from '../engine/calc'
   import { formatUnitName } from '../engine/format'
+  import { readPasted, pastedForInput } from '../engine/paste'
   import { settings, calcSettings, converter } from '../lib/state.svelte'
   import Icon from './Icon.svelte'
 
@@ -239,6 +240,16 @@
     converter.amount = value
   }
 
+  /** A number pasted from another app: 1 234,56 or $1,299.99 is cleaned up first. */
+  function paste(side: 'a' | 'b', e: ClipboardEvent & { currentTarget: HTMLInputElement }) {
+    const p = readPasted(e.clipboardData?.getData('text/plain') ?? '', settings.decimal)
+    if (!p) return
+    e.preventDefault()
+    const input = e.currentTarget
+    input.setRangeText(pastedForInput(p, settings.decimal), input.selectionStart ?? 0, input.selectionEnd ?? 0, 'end')
+    edit(side, input.value)
+  }
+
   const unitLabel = (code: string) => category.units.find((x) => x.u === code)?.label ?? code
 </script>
 
@@ -263,6 +274,7 @@
           autocomplete="off"
           placeholder="0"
           oninput={(e) => edit(side, e.currentTarget.value)}
+          onpaste={(e) => paste(side, e)}
           onfocus={(e) => e.currentTarget.select()}
         />
         <label class="visually-hidden" for="unit-{side}">Unit</label>

@@ -41,6 +41,8 @@ A calculator for university calculus and physics, for Android and PC. Everything
 
 On a PC you can type: `/` makes a fraction, `^` a power; `sqrt`, `sin`, `pi` and `int` work too. Arrow keys move inside fractions and roots. Enter gives the answer, Esc clears.
 
+To paste a number from another app, long-press the formula (or right-click, or Ctrl+V), or tap *Paste* while it is empty. Numbers are understood however they are written: 1 234,56 · 1,234.56 · $1,299.99 · 1.5×10⁻³ · "Total: 2 500,75 ₽".
+
 ## Commands
 
 ```

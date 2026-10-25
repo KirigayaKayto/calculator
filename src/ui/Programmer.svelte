@@ -6,6 +6,7 @@
     groupDigits,
     characterOf,
     isDigit,
+    pastedProgram,
     bitAt,
     flipBit,
     wrap,
@@ -124,6 +125,16 @@
     }
   }
 
+  /** Pasted from elsewhere: 1111 0000 or 1 234 567 is one number. */
+  function onpaste(e: ClipboardEvent & { currentTarget: HTMLInputElement }) {
+    const text = e.clipboardData?.getData('text/plain')
+    if (!text) return
+    e.preventDefault()
+    const f = e.currentTarget
+    f.setRangeText(pastedProgram(text), f.selectionStart ?? f.value.length, f.selectionEnd ?? f.value.length, 'end')
+    p.expr = f.value
+  }
+
   type PadKey = { label: string; aria?: string; text?: string; act?: () => void; kind: 'num' | 'fn' | 'op' | 'eq'; digit?: string; wide?: boolean }
   const op = (label: string, text = ` ${label} `, aria?: string): PadKey => ({ label, text, kind: 'fn', aria })
   const digit = (d: string): PadKey => ({ label: d, text: d, kind: 'num', digit: d })
@@ -175,6 +186,7 @@
       autocomplete="off"
       spellcheck="false"
       oninput={(e) => (p.expr = e.currentTarget.value)}
+      {onpaste}
       {onkeydown}
     />
     <p class="status" aria-live="polite">

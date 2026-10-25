@@ -20,6 +20,7 @@
     shownExact,
     haptic,
     copy,
+    showToast,
     type HistoryEntry,
   } from '../lib/state.svelte'
   import { latexMarkup, numberLatex } from '../lib/markup'
@@ -27,6 +28,8 @@
   import type { Key } from './keys'
   import History from './History.svelte'
   import FormatChip from './FormatChip.svelte'
+  import FieldPaste from './FieldPaste.svelte'
+  import { pastedLatex } from './paste'
   import Icon from './Icon.svelte'
 
   // fonts come from mathlive/fonts.css (bundled, so they work offline); no key sounds
@@ -35,6 +38,9 @@
 
   let host = $state<HTMLDivElement>()
   let mf: MathfieldElement | undefined
+  /** The same field, for the Paste menu (which needs to know when it exists). */
+  let fieldEl = $state<MathfieldElement>()
+  let paster = $state<{ paste(): Promise<void> }>()
   let error = $state('')
   let shaking = $state(false)
   let inv = $state(false)
@@ -291,6 +297,18 @@
     if (!mf) return
     beforeInput(continues)
     mf.executeCommand(['insert', latex, { selectionMode: 'placeholder' }])
+  }
+
+  /** Text pasted from another app: numbers like 1 234,56 or $1,299.99 are cleaned up first. */
+  function pasteText(text: string) {
+    if (!mf) return
+    const latex = pastedLatex(text, settings.decimal)
+    if (!latex) return showToast('No number to paste')
+    focusField()
+    // after "=", a pasted number starts anew; "+ 5" continues from the answer
+    beforeInput(/^\s*[+*/^×÷·]/.test(text))
+    mf.executeCommand(['insert', latex])
+    sync()
   }
 
   function parenKey() {
@@ -590,6 +608,7 @@
     field.addEventListener('input', sync)
     field.addEventListener('pointerdown', () => (justEvaluated = false))
     mf = field
+    fieldEl = field
     mf.position = mf.lastOffset
     if (ui.page === 'calc') warmUpCas()
     // a constant chosen in Tools
@@ -603,6 +622,7 @@
     return () => {
       field.remove()
       mf = undefined
+      fieldEl = undefined
     }
   })
 </script>
@@ -619,11 +639,18 @@
       {/if}
 
       <div class="field {sizeClass}" class:shaking bind:this={host}></div>
+      <FieldPaste bind:this={paster} target={fieldEl} onpaste={pasteText} />
 
       <div class="result-row" aria-live="polite">
         <FormatChip onchange={reformatAnswer} />
         <span class="spacer"></span>
-        {#if error}
+        {#if !ui.latex.trim()}
+          <!-- the phone's own Paste is gone with its keyboard: here it is, while the field is empty -->
+          <button class="paste-btn" onmousedown={(e) => e.preventDefault()} onclick={() => paster?.paste()}>
+            <Icon name="paste" size={16} />
+            Paste
+          </button>
+        {:else if error}
           <span class="error">{error}</span>
         {:else if solutions}
           <span class="preview solved">{@html latexMarkup(solutionsLatex(solutions))}</span>
@@ -824,6 +851,23 @@
   .result-row .icon-btn {
     color: var(--muted);
     flex: none;
+  }
+
+  .paste-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .paste-btn:active {
+    background: var(--key-fn);
   }
 
   @media (max-height: 520px) {

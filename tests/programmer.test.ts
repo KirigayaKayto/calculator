@@ -7,6 +7,7 @@ import {
   flipBit,
   bitAt,
   isDigit,
+  pastedProgram,
   type Radix,
   type Word,
 } from '../src/engine/programmer'
@@ -86,6 +87,16 @@ describe('programmer calculator', () => {
     expect(groupDigits('1234567', 10)).toBe('1 234 567')
     expect(groupDigits('-1234', 10)).toBe('-1 234')
     expect(groupDigits('DEADBEEF', 16)).toBe('DEAD BEEF')
+  })
+
+  it('cleans pasted numbers', () => {
+    expect(pastedProgram('1111 0000')).toBe('11110000')
+    expect(pastedProgram('DE AD BE EF')).toBe('DEADBEEF')
+    expect(pastedProgram('1 234 567')).toBe('1234567')
+    expect(pastedProgram('1,234,567')).toBe('1234567')
+    expect(pastedProgram('5 AND 3')).toBe('5 AND 3')
+    expect(pastedProgram('A AND B')).toBe('A AND B')
+    expect(pastedProgram('−7 × 2')).toBe('-7 * 2')
   })
 
   it('flips bits and names characters', () => {
