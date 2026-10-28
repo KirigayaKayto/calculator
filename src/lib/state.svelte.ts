@@ -65,8 +65,11 @@ export function calcSettings(s: Settings = settings): CalcSettings {
   }
 }
 
-/** `latex` is the content of the textbook-style calculator field; `page` the key page shown. */
-export const ui = $state<{ tab: Tab; latex: string; page: string }>({
+/**
+ * `latex` is the content of the textbook-style calculator field; `page` the key page shown;
+ * `answerLatex` what the field showed right after the last "=", so the answer survives a tab switch.
+ */
+export const ui = $state<{ tab: Tab; latex: string; page: string; answerLatex?: string }>({
   tab: 'calc',
   latex: '',
   page: 'main',

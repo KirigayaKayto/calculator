@@ -5,7 +5,7 @@
   import { formatBig } from '../engine/format'
   import { math } from '../engine/math'
   import { identifierLatex } from '../engine/latex'
-  import { graph, settings, wide, short, PALETTE, newId, haptic } from '../lib/state.svelte'
+  import { graph, settings, wide, short, PALETTE, newId } from '../lib/state.svelte'
   import { latexMarkup, numberLatex } from '../lib/markup'
   import GraphCanvas, { type Plot } from './GraphCanvas.svelte'
   import MathLine from './MathLine.svelte'
@@ -94,7 +94,6 @@
   }
 
   function onkey(key: Key, fromPage: string, sticky: boolean) {
-    haptic()
     const f = field
     if (!f) return
     if (applyKey(f, key, settings.decimal) === 'inv') {

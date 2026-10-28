@@ -29,6 +29,11 @@ const SUPERSCRIPT: Record<string, string> = {
   '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻',
 }
 
+/** Digits and a minus sign raised: "-12" → "⁻¹²". */
+export function superscript(text: string): string {
+  return [...text].map((c) => SUPERSCRIPT[c] ?? c).join('')
+}
+
 function fixedText(s: string, { decimal, plain }: FormatOptions): string {
   const [int, frac] = s.split('.')
   const whole = plain ? int : int.replace(/\B(?=(\d{3})+(?!\d))/g, GROUP)
@@ -38,7 +43,7 @@ function fixedText(s: string, { decimal, plain }: FormatOptions): string {
 function scientificText(mantissa: string, power: number, opts: FormatOptions): string {
   const m = mantissa.replace('.', opts.decimal)
   if (opts.plain) return `${m}e${power}`
-  return `${m}×10${[...String(power)].map((c) => SUPERSCRIPT[c]).join('')}`
+  return `${m}×10${superscript(String(power))}`
 }
 
 /** Scientific notation with `sig` significant figures, trailing zeros kept: 2.50×10³. */

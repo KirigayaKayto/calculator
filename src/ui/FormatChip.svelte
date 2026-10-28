@@ -117,10 +117,16 @@
     color: var(--muted);
   }
 
-  .chip:hover,
   .chip[aria-expanded='true'] {
     background: var(--key-fn);
     color: var(--text);
+  }
+
+  @media (hover: hover) {
+    .chip:hover {
+      background: var(--key-fn);
+      color: var(--text);
+    }
   }
 
   /* opens over the keys, so the expression and the changing answer stay visible */

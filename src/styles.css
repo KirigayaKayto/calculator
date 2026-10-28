@@ -125,12 +125,117 @@ button:disabled {
   transition: background-color var(--fast);
 }
 
-.icon-btn:hover {
-  background: var(--key-fn);
+@media (hover: hover) {
+  .icon-btn:hover {
+    background: var(--key-fn);
+  }
 }
 
 .icon-btn:active {
   background: var(--key-active);
+}
+
+/* The sliding pill of a segmented control (see ui/pill.ts). */
+.pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  border-radius: var(--pill-radius, 10px);
+  background: var(--pill-bg, var(--key));
+  box-shadow: var(--pill-shadow, none);
+  pointer-events: none;
+}
+
+.pill.ready {
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity var(--fast);
+}
+
+/* Dialogs fade and rise in (a sheet from the bottom on a phone) and fade out. */
+dialog {
+  opacity: 0;
+  transform: translateY(16px) scale(0.98);
+  transition:
+    opacity var(--normal) ease,
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    overlay var(--normal) allow-discrete,
+    display var(--normal) allow-discrete;
+}
+
+dialog[open] {
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  dialog[open] {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+
+dialog::backdrop {
+  background: transparent;
+  transition:
+    background-color var(--normal) ease,
+    overlay var(--normal) allow-discrete,
+    display var(--normal) allow-discrete;
+}
+
+dialog[open]::backdrop {
+  background: var(--scrim);
+}
+
+@starting-style {
+  dialog[open]::backdrop {
+    background: transparent;
+  }
+}
+
+@media (max-width: 600px) {
+  dialog {
+    transform: translateY(40px);
+  }
+  @starting-style {
+    dialog[open] {
+      transform: translateY(40px);
+    }
+  }
+  /* the handle of a sheet */
+  dialog > .sheet::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 0 auto;
+    border-radius: 2px;
+    background: var(--border);
+  }
+}
+
+/* "=": the formula glides up into the history while the answer rises into the field. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(expr) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-new(answer) {
+  animation: 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both rise;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
 }
 
 .visually-hidden {

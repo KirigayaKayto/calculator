@@ -3,12 +3,32 @@
   import Icon from './Icon.svelte'
   import Segmented from './Segmented.svelte'
   import { settings, history, install } from '../lib/state.svelte'
+  import { update, checkForUpdates, applyUpdate, APP_VERSION, BUILD_TIME } from '../lib/update.svelte'
 
-  let { onclose, oncustomize }: { onclose: () => void; oncustomize: () => void } = $props()
+  let { onclose, oncustomize, onwhatsnew }: { onclose: () => void; oncustomize: () => void; onwhatsnew: () => void } =
+    $props()
 
   let dialog = $state<HTMLDialogElement>()
   let historyCleared = $state(false)
   const canVibrate = typeof navigator !== 'undefined' && 'vibrate' in navigator
+
+  const built = new Date(BUILD_TIME).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  const updateLabel = $derived(
+    {
+      idle: 'Check for updates',
+      checking: 'Checking…',
+      available: `Update to ${update.next?.version ?? 'the new version'}`,
+      updating: 'Updating…',
+      upToDate: 'Up to date',
+      offline: 'Offline: try again later',
+      error: 'Could not check',
+    }[update.status],
+  )
+
+  function updateAction() {
+    if (update.status === 'available') applyUpdate()
+    else checkForUpdates()
+  }
 
   onMount(() => dialog?.showModal())
 
@@ -154,9 +174,24 @@
       </button>
     </div>
 
-    <p class="about">
-      No ads, no tracking. Everything stays on this device. Works offline.
-    </p>
+    <div class="about">
+      <p class="version">Version {APP_VERSION} · built {built}</p>
+      <div class="actions">
+        <button
+          class="action"
+          class:primary={update.status === 'available'}
+          onclick={updateAction}
+          disabled={update.status === 'checking' || update.status === 'updating'}
+        >
+          <Icon name={update.status === 'upToDate' ? 'check' : 'arrow-up-circle'} size={18} />
+          {updateLabel}
+        </button>
+        <button class="action" onclick={onwhatsnew}>
+          <Icon name="sparkles" size={18} /> What's new
+        </button>
+      </div>
+      <p class="note">No ads, no tracking. Everything stays on this device. Works offline.</p>
+    </div>
   </div>
 </dialog>
 
@@ -171,15 +206,25 @@
     color: var(--text);
   }
 
-  dialog::backdrop {
-    background: var(--scrim);
-  }
-
   .sheet {
     display: flex;
     flex-direction: column;
     gap: 20px;
     padding: 12px 20px 24px;
+  }
+
+  /* on a phone: a sheet from the bottom edge */
+  @media (max-width: 600px) {
+    dialog {
+      width: 100%;
+      max-width: none;
+      max-height: 92dvh;
+      margin: auto 0 0;
+      border-radius: 24px 24px 0 0;
+    }
+    .sheet {
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    }
   }
 
   header {
@@ -225,7 +270,21 @@
   }
 
   .about {
-    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .version {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .note {
+    margin: 4px 0 0;
     font-size: 14px;
     color: var(--muted);
   }

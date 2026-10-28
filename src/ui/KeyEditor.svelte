@@ -7,7 +7,7 @@
   import { applyKey } from './applyKey'
   import { latexMarkup } from '../lib/markup'
   import { KEYS, PAGES, PAGE_SIZE, customKey, pageSize, type Key, type Page } from './keys'
-  import { keyLayout, addNewPages, newId, showToast, settings, haptic, type CustomKeyData } from '../lib/state.svelte'
+  import { keyLayout, addNewPages, newId, showToast, settings, type CustomKeyData } from '../lib/state.svelte'
 
   let { onclose }: { onclose: () => void } = $props()
 
@@ -25,7 +25,6 @@
   let inv = $state(false)
 
   function onkey(key: Key) {
-    haptic()
     if (!typing) return
     if (applyKey(typing, key, settings.decimal) === 'inv') {
       inv = !inv
@@ -317,15 +316,25 @@
     color: var(--text);
   }
 
-  dialog::backdrop {
-    background: var(--scrim);
-  }
-
   .sheet {
     display: flex;
     flex-direction: column;
     gap: 14px;
     padding: 12px 16px 20px;
+  }
+
+  /* on a phone: a sheet from the bottom edge */
+  @media (max-width: 600px) {
+    dialog {
+      width: 100%;
+      max-width: none;
+      max-height: 92dvh;
+      margin: auto 0 0;
+      border-radius: 24px 24px 0 0;
+    }
+    .sheet {
+      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    }
   }
 
   header {

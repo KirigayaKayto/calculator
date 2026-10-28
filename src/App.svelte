@@ -5,7 +5,14 @@
   import Settings from './ui/Settings.svelte'
   import KeyEditor from './ui/KeyEditor.svelte'
   import Icon from './ui/Icon.svelte'
+  import UpdateBanner from './ui/UpdateBanner.svelte'
+  import WhatsNew from './ui/WhatsNew.svelte'
+  import { onMount } from 'svelte'
+  import { fade } from 'svelte/transition'
+  import { slidingPill } from './ui/pill'
   import { ui, settings, prefersDark, toast, type Tab } from './lib/state.svelte'
+  import { setupUpdates, APP_VERSION } from './lib/update.svelte'
+  import { load, save } from './lib/storage'
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'calc', label: 'Calculator' },
@@ -18,6 +25,18 @@
 
   let settingsOpen = $state(false)
   let keysOpen = $state(false)
+  let whatsNewOpen = $state(false)
+
+  onMount(() => {
+    setupUpdates()
+    // after an update, show what changed (not on a fresh install: there is nothing to compare with)
+    const seen = load<string | null>('seenVersion', null)
+    if (seen !== APP_VERSION) {
+      const existing = seen !== null || localStorage.getItem('calc.ui-v2') !== null
+      if (existing) whatsNewOpen = true
+      save('seenVersion', APP_VERSION)
+    }
+  })
 
   const dark = $derived(settings.theme === 'dark' || (settings.theme === 'system' && prefersDark.current))
 
@@ -41,7 +60,7 @@
 
 <div class="app">
   <header class="topbar">
-    <div class="tabs" role="tablist" aria-label="Mode">
+    <div class="tabs" role="tablist" aria-label="Mode" use:slidingPill={{ key: ui.tab, selector: '[aria-selected="true"]' }}>
       {#each TABS as tab, i (tab.id)}
         <button
           id="tab-{tab.id}"
@@ -62,15 +81,17 @@
   </header>
 
   <main>
-    <div class="panel" id="panel" role="tabpanel" aria-labelledby="tab-{ui.tab}">
-      {#if ui.tab === 'calc'}
-        <Calculator />
-      {:else if ui.tab === 'graph'}
-        <Worksheet />
-      {:else}
-        <Tools />
-      {/if}
-    </div>
+    {#key ui.tab}
+      <div class="panel" id="panel" role="tabpanel" aria-labelledby="tab-{ui.tab}" in:fade={{ duration: 140 }}>
+        {#if ui.tab === 'calc'}
+          <Calculator />
+        {:else if ui.tab === 'graph'}
+          <Worksheet />
+        {:else}
+          <Tools />
+        {/if}
+      </div>
+    {/key}
   </main>
 
   {#if settingsOpen}
@@ -80,12 +101,22 @@
         settingsOpen = false
         keysOpen = true
       }}
+      onwhatsnew={() => {
+        settingsOpen = false
+        whatsNewOpen = true
+      }}
     />
   {/if}
 
   {#if keysOpen}
     <KeyEditor onclose={() => (keysOpen = false)} />
   {/if}
+
+  {#if whatsNewOpen}
+    <WhatsNew onclose={() => (whatsNewOpen = false)} />
+  {/if}
+
+  <UpdateBanner />
 
   <div class="toast" class:visible={toast.message} role="status" aria-live="polite">{toast.message}</div>
 </div>
@@ -110,6 +141,7 @@
   }
 
   .tabs {
+    position: relative;
     flex: 1;
     max-width: 560px;
     margin-right: auto;
@@ -119,9 +151,14 @@
     border-radius: 14px;
     background: var(--key-fn);
     min-width: 0;
+    --pill-bg: var(--key);
+    --pill-shadow: var(--shadow);
+    --pill-radius: 10px;
   }
 
   .tabs button {
+    position: relative;
+    z-index: 1;
     flex: 1 1 auto;
     min-height: 40px;
     padding: 0 6px;
@@ -132,15 +169,11 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition:
-      background-color var(--fast),
-      color var(--fast);
+    transition: color var(--normal);
   }
 
   .tabs button[aria-selected='true'] {
-    background: var(--key);
     color: var(--text);
-    box-shadow: var(--shadow);
   }
 
   main {

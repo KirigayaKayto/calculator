@@ -1,0 +1,53 @@
+[
+  {
+    "version": "0.2.0",
+    "date": "2026-10-29",
+    "title": "Exact answers, smoother keys, updates you control",
+    "highlights": [
+      {
+        "icon": "sparkles",
+        "title": "Exact answers, instantly",
+        "text": "√20 is 2√5, 2/√2 is √2, sin 60° is √3/2. The exact form appears as you type, works offline, and ⇄ always switches to the decimal.",
+        "latex": "\\sqrt{20}=2\\sqrt{5}"
+      },
+      {
+        "icon": "swap",
+        "title": "Exact all the way",
+        "text": "Continuing from an answer keeps it exact: 2√5 × √5 is exactly 10, not 9.999…",
+        "latex": "2\\sqrt{5}\\times\\sqrt{5}=10"
+      },
+      {
+        "icon": "hand",
+        "title": "Swipe the key pages",
+        "text": "123, f(x), Calc, Phys, Units and abc lie side by side: swipe between them, or tap a tab. Keys react the moment you touch them."
+      },
+      {
+        "icon": "backspace",
+        "title": "Hold ⌫ to keep deleting",
+        "text": "Hold the delete key or the cursor arrows and they repeat, faster after a moment."
+      },
+      {
+        "icon": "keyboard",
+        "title": "Smoother everywhere",
+        "text": "The formula glides into the history when you press =, settings slide up as a sheet, and the answer survives a tab switch or a reload."
+      },
+      {
+        "icon": "arrow-up-circle",
+        "title": "Updates you control",
+        "text": "The app no longer reloads itself. When a new version is ready you choose Update or Later, and this screen tells you what changed."
+      }
+    ]
+  },
+  {
+    "version": "0.1.0",
+    "date": "2026-10-25",
+    "title": "The university calculator",
+    "highlights": [
+      {
+        "icon": "info",
+        "title": "Textbook input and answers",
+        "text": "Stacked fractions, roots and exponents; calculus and physics keys; a Desmos-like graph; units, constants, base, statistics and integer tools."
+      }
+    ]
+  }
+]

@@ -9,9 +9,11 @@
     onpick: (entry: HistoryEntry, part: 'expr' | 'result') => void
     /** Inside the display on phones: no heading, newest entry right above the formula. */
     compact?: boolean
+    /** While "=" animates: the newest expression is where the formula field glides to. */
+    morphNewest?: boolean
   }
 
-  let { onpick, compact = false }: Props = $props()
+  let { onpick, compact = false, morphNewest = false }: Props = $props()
 
   let list = $state<HTMLElement>()
   let confirming = $state(false)
@@ -68,9 +70,14 @@
         </button>
       </li>
     {/if}
-    {#each history.items as item (item.at)}
+    {#each history.items as item, i (item.at)}
       <li>
-        <button class="expr" title="Insert this expression" onclick={() => onpick(item, 'expr')}>
+        <button
+          class="expr"
+          title="Insert this expression"
+          style:view-transition-name={morphNewest && i === history.items.length - 1 ? 'expr' : undefined}
+          onclick={() => onpick(item, 'expr')}
+        >
           {#if item.latex}{@html latexMarkup(item.latex)}{:else}{item.expr}{/if}
         </button>
         <button class="result" title="Insert this answer" onclick={() => onpick(item, 'result')}>
@@ -144,8 +151,10 @@
     scrollbar-width: none;
   }
 
-  li button:hover {
-    background: var(--key-fn);
+  @media (hover: hover) {
+    li button:hover {
+      background: var(--key-fn);
+    }
   }
 
   .expr {
@@ -182,8 +191,10 @@
     color: var(--muted);
   }
 
-  .clear:hover {
-    background: var(--key-fn);
+  @media (hover: hover) {
+    .clear:hover {
+      background: var(--key-fn);
+    }
   }
 
   .clear.confirming {

@@ -1,8 +1,20 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
+  import { fade } from 'svelte/transition'
   import { MathfieldElement } from 'mathlive'
   import { calculate, calculateLatex, format, newScope, type CalcResult } from '../engine/calc'
-  import { toFraction, fractionLatex, fractionPlain, prefersFraction } from '../engine/exact'
+  import {
+    toFraction,
+    fractionLatex,
+    fractionPlain,
+    prefersFraction,
+    hasDecimalLiteral,
+    kind,
+    toLatex,
+    toPlain,
+    type Exact,
+    type Kind,
+  } from '../engine/exact'
   import { math } from '../engine/math'
   import { balanceParens, identifierLatex } from '../engine/latex'
   import { CONSTANT_MACROS, constantsAsSymbols } from '../engine/constants'
@@ -18,7 +30,6 @@
     history,
     addHistory,
     shownExact,
-    haptic,
     copy,
     showToast,
     type HistoryEntry,
@@ -56,10 +67,11 @@
     latex: string
     plain: string
   }
-  /** The last answer. `value` is its exact number (for Ans and for continuing), if it is a number. */
+  /** The last answer: its number (for Ans and for continuing) and its exact value (2√5), if any. */
   interface Answer {
     id: number
     value: unknown
+    exactValue: Exact | null
     decimal: Form | null
     exact: Form | null
     showExact: boolean
@@ -83,39 +95,74 @@
 
   const CAS_ONLY =
     /\\int|\\frac\{d|\\frac\{\\mathrm\{d\}|\\lim|\\sum|\\prod|\\operatorname\{(?:Series|Factor|Expand|Simplify)\}|\\right\|_|\\begin\{cases\}|=/
-  /** Where the exact form says more than the decimal: √2/2 rather than 0.7071… */
-  const IRRATIONAL = /\\sqrt|\\pi|\\sin|\\cos|\\tan|\\cot|\\sec|\\csc|\\arc|\\log|\\ln|\\exponentialE/
 
   function isPlainNumber(latex: string) {
     return /^-?\d+(?:\.\d+)?$/.test(latex.replace(/\\[,!; ]|\s/g, '').replace('{,}', '.'))
   }
 
-  /**
-   * Calculus and algebra are done in radians, as in every textbook; the degree mode only
-   * applies when the CAS works out the exact value of a number (sin 45° = √2/2).
-   */
-  function casAngle(latex: string, symbolic: boolean) {
-    return symbolic || CAS_ONLY.test(latex) ? 'rad' : settings.angle
+  /** An exact value written both ways, or null for a whole number (the decimal already says it). */
+  function exactForms(e: Exact): Form | null {
+    if (kind(e) === 'integer') return null
+    return { latex: toLatex(e, { mixed: settings.mixedNumbers }), plain: toPlain(e) }
   }
 
-  /** Ans: the exact last answer, or the last one in the history after a restart. */
-  const ansValue = $derived.by(() => {
-    if (answer) return answer.value
+  /** The exact value behind an answer written as LaTeX (2\sqrt{5}, \frac{1}{3}), when the arithmetic can read it. */
+  function exactValueOf(latex: string): Exact | null {
+    const r = calculateLatex(latex, cs)
+    return r.ok ? (r.exact ?? null) : null
+  }
+
+  /**
+   * The answer of a history entry, computed again: its number (with all its digits when the
+   * exact form is known) and its exact value, so Ans stays exact after a restart.
+   */
+  function recoverAnswer(entry: HistoryEntry): Answer | null {
+    if (entry.solved) return null
+    let r: CalcResult | null = null
+    if (entry.exact) {
+      const e = calculateLatex(entry.exact, cs)
+      if (e.ok) r = e
+    }
+    if (!r && entry.plain) {
+      const p = calculate(entry.plain, { ...cs, decimal: /\d,\d/.test(entry.plain) ? ',' : '.' })
+      if (p.ok) r = p
+    }
+    if (!r) return null
+    const exact = r.exact ? exactForms(r.exact) : entry.exact ? { latex: entry.exact, plain: entry.exact } : null
+    return {
+      id: 0,
+      value: r.value,
+      exactValue: r.exact ?? null,
+      decimal: entry.plain ? { latex: plainToLatex(entry.plain), plain: entry.plain } : null,
+      exact,
+      showExact: !!exact && !!entry.showExact,
+    }
+  }
+
+  const lastAnswer = $derived.by(() => {
     const last = history.items.at(-1)
-    if (!last?.plain || last.solved) return undefined
-    const r = calculate(last.plain, { ...cs, decimal: /\d,\d/.test(last.plain) ? ',' : '.' })
-    return r.ok ? r.value : undefined
+    return last ? recoverAnswer(last) : null
+  })
+
+  /** Ans: the last answer, or the last one in the history after a restart. */
+  const ansValue = $derived.by(() => {
+    const a = answer ?? lastAnswer
+    return a && a.value !== undefined ? { value: a.value, exact: a.exactValue } : undefined
   })
 
   const CONTINUES = /^(?:[-+*/:^!)]|\\(?:cdot|times|div|bmod|%))/
 
   function evaluate(latex: string): CalcResult {
     const scope = newScope(cs.angle)
-    if (ansValue !== undefined) scope.set('Ans', ansValue)
+    if (ansValue !== undefined) {
+      scope.set('Ans', ansValue.value)
+      if (ansValue.exact) scope.exact.set('Ans', ansValue.exact)
+    }
     if (answer?.value !== undefined && answerLatex && latex.startsWith(answerLatex)) {
       const rest = latex.slice(answerLatex.length).trimStart()
       if (rest === '' || CONTINUES.test(rest)) {
         scope.set('_ans', answer.value)
+        if (answer.exactValue) scope.exact.set('_ans', answer.exactValue)
         return calculateLatex(rest, cs, scope, '_ans')
       }
     }
@@ -124,29 +171,37 @@
 
   /**
    * What the CAS gets: parentheses closed, constants as their symbols (so E = mc² can be
-   * solved for m), and the answer itself in place of Ans.
+   * solved for m), and the answer itself in place of Ans. Calculus and algebra are done in
+   * radians, as in every textbook.
    */
   function forCas(latex: string): string {
-    const ans =
-      answer?.exact?.latex ??
-      answer?.decimal?.latex ??
-      (ansValue !== undefined ? plainToLatex(format(ansValue, cs, true)) : null)
+    const a = answer ?? lastAnswer
+    const ans = a ? (a.exact?.latex ?? a.decimal?.latex ?? null) : null
     const balanced = constantsAsSymbols(balanceParens(latex))
     return ans === null
       ? balanced
       : balanced.replace(/\\(?:operatorname|mathrm)\{(?:\\mathrm\{)?Ans\}?\}/g, `\\left(${ans}\\right)`)
   }
 
-  /** Fractions are the natural answer only in the automatic format and for fraction problems. */
-  function wantsFraction(latex: string) {
-    return settings.format === 'auto' && prefersFraction(latex)
+  /**
+   * Whether the exact form is the natural answer: a fraction for a fraction problem (as
+   * calculators with a textbook display do); radicals and π when exact answers are on and
+   * nothing was typed as a decimal. Only in the automatic format: Fix 2 asks for decimals.
+   * ⇄ always switches.
+   */
+  function wantsExact(latex: string, k: Kind) {
+    if (settings.format !== 'auto') return false
+    if (k === 'rational') return prefersFraction(latex)
+    return settings.exactAnswers && !hasDecimalLiteral(latex)
   }
 
   const numeric = $derived(evaluate(ui.latex))
   const viaCas = $derived(CAS_ONLY.test(ui.latex) || (!numeric.ok && !!numeric.unknown))
-  // a measurement (2.50 ± 0.02) is not a fraction
-  const fraction = $derived(numeric.ok && !numeric.latex ? toFraction(numeric.value) : null)
-  const previewAsFraction = $derived(!!fraction && wantsFraction(ui.latex) !== flipped)
+  /** The exact form of what is typed (2√5, 5/6), when it says more than the decimal. */
+  const exactForm = $derived(numeric.ok && !numeric.latex && numeric.exact ? exactForms(numeric.exact) : null)
+  const previewExact = $derived(
+    !!exactForm && numeric.ok && !!numeric.exact && wantsExact(ui.latex, kind(numeric.exact)) !== flipped,
+  )
   const showingAnswer = $derived(!!answer && ui.latex === answerLatex)
 
   // ---- the symbolic preview, while typing ----
@@ -156,12 +211,11 @@
 
   $effect(() => {
     const latex = ui.latex
-    const angle = casAngle(latex, true)
     if (!viaCas || showingAnswer || solutions || !latex.trim()) return
     const seq = ++previewSeq
     const timer = setTimeout(async () => {
       try {
-        const a = await askCas({ latex: forCas(latex), angle })
+        const a = await askCas({ latex: forCas(latex), angle: 'rad' })
         if (seq === previewSeq) casPreview = { latex, answer: a }
       } catch (e) {
         if (seq === previewSeq) casPreview = { latex, error: (e as Error).message }
@@ -182,6 +236,7 @@
     return {
       id: ++answerSeq,
       value,
+      exactValue: exactValueOf(v.exact),
       decimal,
       exact,
       showExact: !!exact && (!decimal || (settings.exactAnswers && settings.format === 'auto')),
@@ -216,11 +271,7 @@
     // a bare number needs no "= …" under it
     if (!numeric.ok || /^-?[\d{},.\s]*$/.test(ui.latex)) return null
     return {
-      latex:
-        '=' +
-        (previewAsFraction && fraction
-          ? fractionLatex(fraction, settings.mixedNumbers)
-          : (numeric.latex ?? numberLatex(numeric.plain, settings.decimal, true))),
+      latex: '=' + (previewExact && exactForm ? exactForm.latex : (numeric.latex ?? numberLatex(numeric.plain, settings.decimal, true))),
       note: numeric.note,
     }
   })
@@ -230,7 +281,7 @@
       ? solutions.items.some((r) => r.approx !== null && !isPlainNumber(r.exact))
       : showingAnswer
         ? !!answer?.exact && !!answer.decimal
-        : !viaCas && !!fraction,
+        : !viaCas && !!exactForm,
   )
 
   // ---- layout ----
@@ -238,7 +289,63 @@
   const sideBySide = $derived(wide.current || short.current)
   const historyAside = $derived(wide.current && !short.current)
   const historyInline = $derived(!wide.current && !short.current)
-  const sizeClass = $derived(ui.latex.length <= 24 ? 'l' : ui.latex.length <= 60 ? 'm' : 's')
+
+  /**
+   * The formula shrinks when it gets wider than the field, by what is drawn rather than by
+   * the length of the LaTeX (a root is long to write and short to draw).
+   */
+  function fitField() {
+    const el = host
+    const content = mf?.shadowRoot?.querySelector<HTMLElement>('.ML__content')
+    if (!el) return
+    if (!content) {
+      el.dataset.size = ui.latex.length <= 24 ? 'l' : ui.latex.length <= 60 ? 'm' : 's'
+      return
+    }
+    const before = el.dataset.size ?? 'l'
+    el.style.transition = 'none'
+    let chosen = 's'
+    for (const size of ['l', 'm', 's']) {
+      el.dataset.size = size
+      if (content.scrollWidth <= content.clientWidth) {
+        chosen = size
+        break
+      }
+    }
+    // back to the old size without a transition, then to the new one with it
+    el.dataset.size = before
+    void el.offsetWidth
+    el.style.transition = ''
+    el.dataset.size = chosen
+  }
+
+  // ---- "=": the formula glides up into the history, the answer rises into the field ----
+
+  let vtField = $state('')
+  let morphNewest = $state(false)
+
+  async function animateAnswer(apply: () => void) {
+    const doc = document as Document & {
+      startViewTransition?: (update: () => Promise<void>) => { finished: Promise<void> }
+    }
+    if (!doc.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return apply()
+    vtField = 'expr'
+    await tick()
+    try {
+      const transition = doc.startViewTransition(async () => {
+        apply()
+        vtField = 'answer'
+        morphNewest = true
+        await tick()
+      })
+      await transition.finished
+    } catch {
+      // the browser skipped the animation; the answer is shown all the same
+    } finally {
+      vtField = ''
+      morphNewest = false
+    }
+  }
 
   // ---- editing ----
 
@@ -251,6 +358,7 @@
     ui.latex = mf.value
     error = ''
     flipped = false
+    requestAnimationFrame(fitField)
   }
 
   /**
@@ -329,6 +437,7 @@
 
   function shake() {
     shaking = true
+    if (settings.haptics) navigator.vibrate?.([12, 40, 12])
     setTimeout(() => (shaking = false), 400)
   }
 
@@ -355,28 +464,6 @@
     })
   }
 
-  /** After a numeric answer, ask the CAS whether it has a nicer exact form (√2/2, π/3). */
-  async function addExactForm(latex: string, a: Answer) {
-    if (a.exact || !settings.exactAnswers || settings.format !== 'auto' || !IRRATIONAL.test(latex)) return
-    let r: CasAnswer
-    try {
-      r = await askCas({ latex: forCas(latex), angle: casAngle(latex, false) })
-    } catch {
-      return
-    }
-    if (r.kind !== 'value' || r.symbolic || isPlainNumber(r.exact) || r.exact.includes('\\int')) return
-    if (answer?.id !== a.id) return // a newer answer replaced this one
-    const withExact = { ...a, exact: { latex: r.exact, plain: r.exact }, showExact: true }
-    const entry = history.items.at(-1)
-    if (entry?.latex === latex) {
-      entry.exact = r.exact
-      entry.showExact = true
-    }
-    const stillShown = showingAnswer
-    answer = withExact
-    if (stillShown) showAnswer(true)
-  }
-
   async function equals(solveFor?: string) {
     if (!mf) return
     const latex = mf.value
@@ -386,7 +473,7 @@
       working = true
       let a: CasAnswer
       try {
-        a = await askCas({ latex: forCas(latex), angle: casAngle(latex, true), solveFor })
+        a = await askCas({ latex: forCas(latex), angle: 'rad', solveFor })
       } catch (e) {
         error = (e as Error).message
         shake()
@@ -414,9 +501,11 @@
         return
       }
       const ans = casAnswer(a)
-      record(latex, ans)
-      answer = ans
-      showAnswer(ans.showExact)
+      animateAnswer(() => {
+        record(latex, ans)
+        answer = ans
+        showAnswer(ans.showExact)
+      })
       return
     }
 
@@ -426,19 +515,21 @@
       shake()
       return
     }
-    const f = r.latex ? null : toFraction(r.value)
+    const form = r.latex || !r.exact ? null : exactForms(r.exact)
     const ans: Answer = {
       id: ++answerSeq,
       value: r.value,
+      exactValue: r.exact ?? null,
       decimal: { latex: r.latex ?? plainToLatex(r.plain), plain: r.plain },
-      exact: f ? { latex: fractionLatex(f, settings.mixedNumbers), plain: fractionPlain(f) } : null,
-      showExact: !!f && wantsFraction(latex) !== flipped,
+      exact: form,
+      showExact: !!form && !!r.exact && wantsExact(latex, kind(r.exact)) !== flipped,
       note: r.note,
     }
-    record(latex, ans)
-    answer = ans
-    showAnswer(ans.showExact)
-    addExactForm(latex, ans)
+    animateAnswer(() => {
+      record(latex, ans)
+      answer = ans
+      showAnswer(ans.showExact)
+    })
   }
 
   /** ⇄: exact ↔ decimal, for the answer, the roots, or the preview. */
@@ -455,7 +546,7 @@
       const form = answer.showExact && answer.exact ? answer.exact : answer.decimal
       if (form) copy(form.plain)
     } else if (!viaCas && numeric.ok) {
-      copy(previewAsFraction && fraction ? fractionPlain(fraction) : numeric.plain)
+      copy(previewExact && exactForm ? exactForm.plain : numeric.plain)
     }
   }
 
@@ -474,7 +565,6 @@
   const NO_RETURN = new Set(['inv', 'shift', 'angle', 'left', 'right'])
 
   function onkey(key: Key, page: string, sticky: boolean) {
-    haptic()
     if (!mf) return
     focusField()
     switch (key.id) {
@@ -586,6 +676,11 @@
     MathfieldElement.decimalSeparator = settings.decimal
   })
 
+  // remembered, so the answer is still the answer after a tab switch or a reload
+  $effect(() => {
+    ui.answerLatex = answerLatex
+  })
+
   onMount(() => {
     MathfieldElement.decimalSeparator = settings.decimal
     const field = new MathfieldElement()
@@ -610,6 +705,12 @@
     mf = field
     fieldEl = field
     mf.position = mf.lastOffset
+    // the field still shows the last answer: a digit starts anew, an operator continues from it
+    if (ui.answerLatex && ui.latex === ui.answerLatex && lastAnswer) {
+      answer = { ...lastAnswer, id: ++answerSeq }
+      answerLatex = ui.latex
+      justEvaluated = true
+    }
     if (ui.page === 'calc') warmUpCas()
     // a constant chosen in Tools
     if (pending.insert) {
@@ -619,7 +720,11 @@
     }
     // on a computer, start typing right away; on a phone, nothing should pop up
     if (matchMedia('(pointer: fine)').matches) focusField()
+    requestAnimationFrame(fitField)
+    const observer = new ResizeObserver(() => fitField())
+    observer.observe(host!)
     return () => {
+      observer.disconnect()
       field.remove()
       mf = undefined
       fieldEl = undefined
@@ -634,11 +739,11 @@
     <div class="display">
       {#if historyInline}
         <div class="history-inline">
-          <History onpick={pick} compact />
+          <History onpick={pick} compact {morphNewest} />
         </div>
       {/if}
 
-      <div class="field {sizeClass}" class:shaking bind:this={host}></div>
+      <div class="field" data-size="l" class:shaking bind:this={host} style:view-transition-name={vtField || undefined}></div>
       <FieldPaste bind:this={paster} target={fieldEl} onpaste={pasteText} />
 
       <div class="result-row" aria-live="polite">
@@ -666,7 +771,9 @@
         {:else if preview?.working}
           <span class="working">{cas.status === 'loading' ? 'Loading the math engine…' : 'Working…'}</span>
         {:else if preview?.latex}
-          <span class="preview">{@html latexMarkup(preview.latex)}</span>
+          {#key flipped}
+            <span class="preview" in:fade={{ duration: 120 }}>{@html latexMarkup(preview.latex)}</span>
+          {/key}
         {/if}
         {#if !error && (showingAnswer ? answer?.note : preview?.note)}
           <span class="note">{showingAnswer ? answer?.note : preview?.note}</span>
@@ -708,7 +815,7 @@
 
   {#if historyAside}
     <aside class="side">
-      <History onpick={pick} />
+      <History onpick={pick} {morphNewest} />
     </aside>
   {/if}
 </div>
@@ -761,13 +868,14 @@
     transition: font-size var(--normal);
   }
 
-  .field.l {
+  /* data-size is set by fitField(), so these are kept as global selectors */
+  .field:global([data-size='l']) {
     font-size: clamp(30px, 5.2dvh, 44px);
   }
-  .field.m {
+  .field:global([data-size='m']) {
     font-size: clamp(24px, 4dvh, 34px);
   }
-  .field.s {
+  .field:global([data-size='s']) {
     font-size: clamp(20px, 3.2dvh, 26px);
   }
 
@@ -837,8 +945,10 @@
     font-size: 20px;
   }
 
-  .var:hover {
-    background: var(--key-op);
+  @media (hover: hover) {
+    .var:hover {
+      background: var(--key-op);
+    }
   }
 
   .error {
@@ -880,11 +990,11 @@
     .field {
       min-height: 48px;
     }
-    .field.l,
-    .field.m {
+    .field:global([data-size='l']),
+    .field:global([data-size='m']) {
       font-size: 28px;
     }
-    .field.s {
+    .field:global([data-size='s']) {
       font-size: 22px;
     }
     .result-row {

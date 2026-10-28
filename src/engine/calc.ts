@@ -5,6 +5,9 @@ import { latexToExpr } from './latex'
 import { CalcError, IncompleteError } from './errors'
 import { labSignificantFigures, evaluateUncertain, roundMeasurement } from './lab'
 import { numberLatex } from './texout'
+import { checkedExact } from './exact-eval'
+import type { Exact } from './exact'
+import type { BigNumber } from 'mathjs'
 
 export interface CalcSettings {
   angle: Angle
@@ -21,9 +24,10 @@ export interface CalcSettings {
 export type CalcResult =
   /**
    * `latex` is set when the answer needs more than a number to be shown (2.50 ± 0.02 m);
-   * `note` is a remark to show next to it ("3 s.f.", "±1.2 %").
+   * `note` is a remark to show next to it ("3 s.f.", "±1.2 %"); `exact` is the exact value
+   * (2√5, 5/6) when the arithmetic can express it.
    */
-  | { ok: true; value: unknown; text: string; plain: string; latex?: string; note?: string }
+  | { ok: true; value: unknown; text: string; plain: string; latex?: string; note?: string; exact?: Exact | null }
   /**
    * `unknown` is the name of an undefined symbol, if that is what failed;
    * `incomplete` means the formula still has empty boxes.
@@ -78,9 +82,17 @@ export function evaluateNormalized(expr: string, settings: CalcSettings, scope: 
   if (!expr) return { ok: false, error: '' }
   useComplexNumbers(!!settings.complex && settings.complex !== 'off')
   try {
-    const value = math.evaluate(expr, scope)
+    const node = math.parse(expr)
+    const value = node.compile().evaluate(scope)
     if (value === undefined) return { ok: false, error: '' }
-    return { ok: true, value, text: format(value, settings), plain: format(value, settings, true) }
+    const text = format(value, settings)
+    const plain = format(value, settings, true)
+    // the exact form of a plain number; lab mode is about measured digits, so it stays decimal
+    const exact =
+      settings.format !== 'lab' && math.isBigNumber(value) && (value as BigNumber).isFinite()
+        ? checkedExact(node, { angle: settings.angle, scope }, value as BigNumber)
+        : null
+    return { ok: true, value, text, plain, exact }
   } catch (e) {
     const unknown = e instanceof Error ? e.message.match(/^Undefined symbol (.+)$/)?.[1] : undefined
     return { ok: false, error: translateError(e), unknown }

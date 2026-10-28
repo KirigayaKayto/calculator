@@ -1,4 +1,6 @@
 <script lang="ts" generics="T extends string | number | boolean">
+  import { slidingPill } from './pill'
+
   interface Props {
     label: string
     name: string
@@ -11,7 +13,7 @@
 
 <fieldset>
   <legend>{label}</legend>
-  <div class="options">
+  <div class="options" use:slidingPill={{ key: value, selector: 'label.active' }}>
     {#each options as o (o.value)}
       <label class:active={value === o.value}>
         <input type="radio" {name} value={String(o.value)} checked={value === o.value} onchange={() => (value = o.value)} />
@@ -36,14 +38,20 @@
   }
 
   .options {
+    position: relative;
     display: flex;
     gap: 4px;
     padding: 4px;
     border-radius: 14px;
     background: var(--key-fn);
+    --pill-bg: var(--key);
+    --pill-shadow: var(--shadow);
+    --pill-radius: 10px;
   }
 
   label {
+    position: relative;
+    z-index: 1;
     flex: 1;
     display: grid;
     place-items: center;
@@ -54,14 +62,12 @@
     text-align: center;
     cursor: pointer;
     color: var(--muted);
-    transition: background-color var(--fast);
+    transition: color var(--normal);
   }
 
   label.active {
-    background: var(--key);
     color: var(--text);
     font-weight: 500;
-    box-shadow: var(--shadow);
   }
 
   label:has(input:focus-visible) {

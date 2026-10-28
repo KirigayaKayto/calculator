@@ -1,6 +1,7 @@
 import { create, all, type BigNumber, type MathJsInstance } from 'mathjs'
 import { CalcError } from './errors'
 import { CONSTANTS, constantVar } from './constants'
+import type { Exact } from './exact'
 
 export type Angle = 'deg' | 'rad'
 
@@ -148,6 +149,9 @@ function constantValues(): [string, unknown][] {
  * Assignments always land in `vars`.
  */
 export class Scope {
+  /** Exact values (2√5) behind some of the variables, for the exact arithmetic. */
+  readonly exact = new Map<string, Exact>()
+
   constructor(
     private base: Map<string, unknown>,
     readonly vars: Map<string, unknown> = new Map(),
@@ -157,6 +161,7 @@ export class Scope {
   }
   set(key: string, value: unknown) {
     this.vars.set(key, value)
+    this.exact.delete(key)
     return this
   }
   has(key: string) {

@@ -1,8 +1,9 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import { latexMarkup } from '../lib/markup'
-  import { KEYS, PAGES, customKey, type Key } from './keys'
-  import { keyLayout } from '../lib/state.svelte'
+  import { KEYS, PAGES, customKey, type Key, type Page } from './keys'
+  import { keyLayout, haptic } from '../lib/state.svelte'
+  import { slidingPill } from './pill'
   import type { DecimalMark } from '../engine/input'
   import type { Angle } from '../engine/math'
 
@@ -50,6 +51,9 @@
   const tabs = $derived((wide ? sidePages : pages).filter((p) => !p.hidden))
   /** The tab to light up: a hidden page (Greek) belongs to the one that opens it (abc). */
   const activeTab = $derived(shown.hidden ? 'abc' : shown.id)
+  const index = $derived(Math.max(0, tabs.findIndex((p) => p.id === activeTab)))
+  /** The page drawn in a tab's slot: a hidden page (Greek) takes the slot of the page that opens it. */
+  const inSlot = (p: Page) => (shown.hidden && p.id === activeTab ? shown : p)
 
   function press(key: Key, pageId: string) {
     if (key.page) return onpage(key.page)
@@ -60,18 +64,139 @@
   function keepFocus(e: MouseEvent) {
     e.preventDefault()
   }
+
+  // ---- touch: the key reacts the moment it is touched, and ⌫ repeats while it is held ----
+
+  let down = $state<string | null>(null)
+  const REPEATS = new Set(['back', 'left', 'right'])
+  let repeatTimer: ReturnType<typeof setTimeout> | undefined
+  let repeatInterval: ReturnType<typeof setInterval> | undefined
+  /** The hold already fired the key: the click on release must not fire it again. */
+  let repeated = false
+
+  function pointerDown(e: PointerEvent, key: Key, pageId: string, slot: string) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    down = slot
+    haptic()
+    repeated = false
+    if (!REPEATS.has(key.id)) return
+    repeatTimer = setTimeout(() => {
+      let fired = 0
+      const tick = () => {
+        repeated = true
+        press(key, pageId)
+        haptic()
+        // faster after a second and a half
+        if (++fired === 20) {
+          clearInterval(repeatInterval)
+          repeatInterval = setInterval(tick, 40)
+        }
+      }
+      tick()
+      repeatInterval = setInterval(tick, 70)
+    }, 400)
+  }
+
+  function pointerUp() {
+    down = null
+    clearTimeout(repeatTimer)
+    clearInterval(repeatInterval)
+    repeatTimer = repeatInterval = undefined
+  }
+
+  function click(key: Key, pageId: string) {
+    if (repeated) {
+      repeated = false
+      return
+    }
+    press(key, pageId)
+  }
+
+  // ---- pages side by side: swipe between them, or tap a tab ----
+
+  let pager = $state<HTMLDivElement>()
+  let animating = false
+  let settleTimer: ReturnType<typeof setTimeout> | undefined
+  let mounted = false
+  const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
+
+  /** Slide to page `i` with a short ease-out (native smooth scrolling is slower than a tap deserves). */
+  function slideTo(i: number, instant = false) {
+    const el = pager
+    if (!el) return
+    const target = i * el.clientWidth
+    const from = el.scrollLeft
+    if (Math.abs(target - from) < 1) return
+    animating = true
+    // snapping would fight the animation; it is restored on the snap point
+    el.style.scrollSnapType = 'none'
+    const done = () => {
+      el.scrollLeft = target
+      el.style.scrollSnapType = ''
+      requestAnimationFrame(() => (animating = false))
+    }
+    if (instant || reducedMotion?.matches) return done()
+    const start = performance.now()
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / 200)
+      el.scrollLeft = from + (target - from) * (1 - (1 - t) ** 3)
+      if (t < 1) requestAnimationFrame(step)
+      else done()
+    }
+    requestAnimationFrame(step)
+  }
+
+  $effect(() => {
+    void tabs.length
+    const i = index
+    slideTo(i, !mounted)
+    mounted = true
+  })
+
+  $effect(() => {
+    if (!pager) return
+    const observer = new ResizeObserver(() => slideTo(index, true))
+    observer.observe(pager)
+    return () => observer.disconnect()
+  })
+
+  /** The finger has settled on a page: make it the current one. */
+  function settle() {
+    const el = pager
+    if (!el || animating || !el.clientWidth) return
+    const p = tabs[Math.round(el.scrollLeft / el.clientWidth)]
+    if (p && p.id !== activeTab) onpage(p.id)
+  }
+
+  // scrollend where the browser has it; a quiet moment elsewhere
+  function onScroll() {
+    if (animating) return
+    clearTimeout(settleTimer)
+    settleTimer = setTimeout(settle, 120)
+  }
+
+  function onScrollEnd() {
+    clearTimeout(settleTimer)
+    settle()
+  }
 </script>
 
 {#snippet button(id: string, pageId: string)}
   {@const key = resolve(id)}
   {#if key}
+    {@const slot = `${pageId}:${id}`}
     <button
       class="key {key.kind}"
       class:pressed={(id === 'inv' || id === 'shift') && inv}
+      class:down={down === slot}
       aria-label={key.aria}
       aria-pressed={id === 'inv' || id === 'shift' ? inv : undefined}
       onmousedown={keepFocus}
-      onclick={() => press(key, pageId)}
+      onpointerdown={(e) => pointerDown(e, key, pageId, slot)}
+      onpointerup={pointerUp}
+      onpointercancel={pointerUp}
+      onpointerleave={pointerUp}
+      onclick={() => click(key, pageId)}
     >
       {#if key.icon}
         <Icon name={key.icon} size={24} />
@@ -86,12 +211,26 @@
   {/if}
 {/snippet}
 
+{#snippet nav(key: Key, icon: 'chevron-left' | 'chevron-right')}
+  <button
+    class="nav"
+    class:down={down === `nav:${key.id}`}
+    aria-label={key.aria}
+    onmousedown={keepFocus}
+    onpointerdown={(e) => pointerDown(e, key, shown.id, `nav:${key.id}`)}
+    onpointerup={pointerUp}
+    onpointercancel={pointerUp}
+    onpointerleave={pointerUp}
+    onclick={() => click(key, shown.id)}
+  >
+    <Icon name={icon} size={22} />
+  </button>
+{/snippet}
+
 <div class="pad" class:wide class:compact>
   <div class="bar">
-    <button class="nav" aria-label="Move cursor left" onmousedown={keepFocus} onclick={() => onkey(KEYS.left, shown.id, true)}>
-      <Icon name="chevron-left" size={22} />
-    </button>
-    <div class="tabs" role="tablist" aria-label="Key pages">
+    {@render nav(KEYS.left, 'chevron-left')}
+    <div class="tabs" role="tablist" aria-label="Key pages" use:slidingPill={{ key: activeTab, selector: '[aria-selected="true"]' }}>
       {#each tabs as p (p.id)}
         <button
           role="tab"
@@ -103,15 +242,18 @@
         </button>
       {/each}
     </div>
-    <button class="nav" aria-label="Move cursor right" onmousedown={keepFocus} onclick={() => onkey(KEYS.right, shown.id, true)}>
-      <Icon name="chevron-right" size={22} />
-    </button>
+    {@render nav(KEYS.right, 'chevron-right')}
   </div>
 
   <div class="grids">
-    <div class="grid" role="group" aria-label={shown.label} style:--cols={shown.cols ?? 5}>
-      {#each shown.keys as id, i (i)}
-        {@render button(id, shown.id)}
+    <div class="pager" bind:this={pager} onscroll={onScroll} onscrollend={onScrollEnd}>
+      {#each tabs as p, i (p.id)}
+        {@const sp = inSlot(p)}
+        <div class="grid" role="group" aria-label={sp.label} style:--cols={sp.cols ?? 5} inert={i !== index}>
+          {#each sp.keys as id, j (j)}
+            {@render button(id, sp.id)}
+          {/each}
+        </div>
       {/each}
     </div>
     {#if wide}
@@ -131,6 +273,9 @@
     gap: 6px;
     padding: 6px 12px 12px;
     --row: clamp(48px, 8.4dvh, 70px);
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   .pad.wide {
@@ -157,22 +302,33 @@
     border-radius: 12px;
     color: var(--text);
     background: var(--key-fn);
+    transition:
+      background-color 180ms,
+      transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
+  .nav.down,
   .nav:active {
     background: var(--key-active);
+    transform: scale(0.94);
+    transition: none;
   }
 
   .tabs {
+    position: relative;
     flex: 1;
     display: flex;
     justify-content: center;
     gap: 2px;
     min-width: 0;
+    --pill-bg: var(--text);
+    --pill-radius: 12px;
   }
 
   /* up to five pages share the bar evenly, even on a small phone */
   .tabs button {
+    position: relative;
+    z-index: 1;
     flex: 1 1 0;
     max-width: 96px;
     min-width: 0;
@@ -185,20 +341,42 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 180ms;
   }
 
   .tabs button[aria-selected='true'] {
-    background: var(--text);
     color: var(--bg);
   }
 
   .grids {
     display: grid;
     gap: 12px;
+    min-width: 0;
   }
 
   .wide .grids {
     grid-template-columns: 1fr 1fr;
+  }
+
+  /* the pages lie side by side; a swipe moves to the next one and settles on it */
+  .pager {
+    display: flex;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .pager::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pager > .grid {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
 
   .grid {
@@ -238,16 +416,23 @@
     color: var(--text);
     box-shadow: var(--shadow);
     transition:
-      background-color var(--fast),
-      filter var(--fast);
+      background-color 180ms,
+      filter 180ms,
+      transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  .key:hover {
-    filter: brightness(0.97);
+  @media (hover: hover) {
+    .key:hover {
+      filter: brightness(0.97);
+    }
   }
 
+  /* pressed: instantly down, then springs back */
+  .key.down,
   .key:active {
     background: var(--key-active);
+    transform: scale(0.95);
+    transition: none;
   }
 
   .key.fn,
@@ -271,7 +456,9 @@
     font-size: 30px;
   }
 
+  .key.eq.down,
   .key.eq:active {
+    background: var(--key-eq);
     filter: brightness(0.9);
   }
 
